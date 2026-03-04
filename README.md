@@ -1,6 +1,8 @@
 # 多人剪刀石頭布（Cloud Run 可部署）
 
-這是一個純前端互動遊戲，透過 `server.mjs` 提供靜態檔服務，已可直接部署到 Google Cloud Run。
+這是一個可多人連線的網頁剪刀石頭布遊戲：
+- 後端 `server.mjs` 維護共用遊戲狀態（玩家、出拳、倒數、結果）
+- 前端透過 `/api/state` 輪詢同步，因此不同裝置/分頁都會看到同一局
 
 ## 本機啟動
 
@@ -28,4 +30,4 @@ gcloud run deploy rps-multiplayer \
   --allow-unauthenticated
 ```
 
-Cloud Run 會自動使用 `Dockerfile` 建置並啟動，服務會監聽 `PORT` 環境變數。
+Cloud Run 會使用 `Dockerfile` 建置，容器啟動後監聽 `PORT`。

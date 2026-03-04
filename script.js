@@ -6,116 +6,52 @@ const countdownEl = document.getElementById('countdown');
 const roundResultEl = document.getElementById('round-result');
 const nextRoundBtn = document.getElementById('next-round-btn');
 const playerTemplate = document.getElementById('player-card-template');
+const centerCountdownEl = document.getElementById('center-countdown');
 
-const beats = { rock: 'scissors', scissors: 'paper', paper: 'rock' };
+const clientId = getOrCreateClientId();
+let state = { players: [], roundActive: true, countdown: null, result: null };
 
-/** @type {{id:number,nickname:string,choice:null|'rock'|'paper'|'scissors'}[]} */
-let players = [];
-let playerId = 1;
-let roundActive = true;
-let countdownRunning = false;
-
-form.addEventListener('submit', (event) => {
+form.addEventListener('submit', async (event) => {
   event.preventDefault();
   const nickname = nicknameInput.value.trim();
-
   if (!nickname) return;
-  if (players.some((p) => p.nickname === nickname)) {
-    setupMessage.textContent = '暱稱重複，請使用其他名稱。';
+
+  const response = await postJson('/api/join', { clientId, nickname });
+  if (!response.ok) {
+    setupMessage.textContent = response.error;
     return;
   }
 
-  players.push({ id: playerId++, nickname, choice: null });
   setupMessage.textContent = `${nickname} 已加入牌桌。`;
   nicknameInput.value = '';
+  state = response.state;
   render();
 });
 
-nextRoundBtn.addEventListener('click', () => {
-  players = players.map((player) => ({ ...player, choice: null }));
-  roundActive = true;
-  countdownRunning = false;
-  nextRoundBtn.disabled = true;
-  countdownEl.textContent = players.length >= 2 ? '等待玩家出拳' : '等待至少 2 位玩家出拳';
-  roundResultEl.textContent = '';
+nextRoundBtn.addEventListener('click', async () => {
+  const response = await postJson('/api/next-round', { clientId });
+  if (!response.ok) {
+    setupMessage.textContent = response.error;
+    return;
+  }
+
+  state = response.state;
   render();
 });
 
-function setChoice(playerIdToUpdate, choice) {
-  if (!roundActive || countdownRunning) return;
+async function choose(choice) {
+  const response = await postJson('/api/choose', { clientId, choice });
+  if (!response.ok) {
+    setupMessage.textContent = response.error;
+    return;
+  }
 
-  players = players.map((player) =>
-    player.id === playerIdToUpdate ? { ...player, choice } : player,
-  );
-
+  state = response.state;
   render();
-  maybeStartCountdown();
 }
 
-function maybeStartCountdown() {
-  if (players.length < 2) {
-    countdownEl.textContent = '等待至少 2 位玩家出拳';
-    return;
-  }
-
-  const allChosen = players.every((player) => player.choice);
-  if (!allChosen || countdownRunning) return;
-
-  countdownRunning = true;
-  runCountdown(3);
-}
-
-function runCountdown(seconds) {
-  countdownEl.textContent = `${seconds}`;
-
-  if (seconds === 0) {
-    revealRound();
-    return;
-  }
-
-  setTimeout(() => runCountdown(seconds - 1), 1000);
-}
-
-function revealRound() {
-  const result = calculateRound(players.map((player) => player.choice));
-  roundActive = false;
-  nextRoundBtn.disabled = false;
-
-  if (result.type === 'draw') {
-    countdownEl.textContent = '開獎：平手！';
-    roundResultEl.textContent = result.reason;
-    render({ winners: [], losers: [] });
-    return;
-  }
-
-  const winners = players
-    .filter((player) => player.choice === result.winningChoice)
-    .map((player) => player.id);
-  const losers = players
-    .filter((player) => player.choice !== result.winningChoice)
-    .map((player) => player.id);
-
-  countdownEl.textContent = '開獎完成！';
-  roundResultEl.textContent = `勝利手勢：${toLabel(result.winningChoice)}；贏家：${players
-    .filter((p) => winners.includes(p.id))
-    .map((p) => p.nickname)
-    .join('、')}`;
-  render({ winners, losers });
-}
-
-function calculateRound(choices) {
-  const uniqueChoices = [...new Set(choices)];
-
-  if (uniqueChoices.length === 1) {
-    return { type: 'draw', reason: '所有人都出一樣，這輪平手。' };
-  }
-
-  if (uniqueChoices.length === 3) {
-    return { type: 'draw', reason: '三種手勢都出現，這輪平手。' };
-  }
-
-  const [a, b] = uniqueChoices;
-  return { type: 'win', winningChoice: beats[a] === b ? a : b };
+function getMyPlayer() {
+  return state.players.find((player) => player.clientId === clientId) || null;
 }
 
 function toLabel(choice) {
@@ -143,45 +79,95 @@ function placeSeat(node, index, total) {
   node.style.transform = 'translate(-50%, -50%)';
 }
 
-function render(highlight = { winners: [], losers: [] }) {
-  playerList.innerHTML = '';
+function render() {
+  const myPlayer = getMyPlayer();
 
-  if (players.length === 0) {
-    countdownEl.textContent = '等待至少 2 位玩家出拳';
-    roundResultEl.textContent = '目前沒有玩家，請先加入。';
-    return;
+  playerList.innerHTML = '';
+  nextRoundBtn.disabled = state.roundActive;
+
+  if (state.countdown) {
+    countdownEl.textContent = '全員就緒，準備開獎...';
+    centerCountdownEl.hidden = false;
+    centerCountdownEl.textContent = String(state.countdown);
+  } else {
+    centerCountdownEl.hidden = true;
+    if (state.players.length < 2) {
+      countdownEl.textContent = '等待至少 2 位玩家出拳';
+    } else if (state.roundActive) {
+      countdownEl.textContent = '等待玩家出拳';
+    } else {
+      countdownEl.textContent = '開獎完成！';
+    }
   }
 
-  if (roundActive && !countdownRunning) {
+  if (state.result) {
+    roundResultEl.textContent = state.result.roundResultText;
+  } else if (state.players.length === 0) {
+    roundResultEl.textContent = '目前沒有玩家，請先加入。';
+  } else {
     roundResultEl.textContent = '';
   }
 
-  players.forEach((player, index) => {
+  state.players.forEach((player, index) => {
     const node = playerTemplate.content.firstElementChild.cloneNode(true);
     const nameEl = node.querySelector('.player-name');
     const statusEl = node.querySelector('.player-status');
     const buttons = node.querySelectorAll('button');
 
-    nameEl.textContent = player.nickname;
+    const isMe = myPlayer && myPlayer.id === player.id;
+    nameEl.textContent = isMe ? `${player.nickname}（你）` : player.nickname;
 
     if (player.choice) {
-      statusEl.textContent = roundActive
-        ? '已就緒，等待其他玩家...'
-        : `本輪：${toLabel(player.choice)}`;
+      statusEl.textContent = state.roundActive ? '已就緒，等待其他玩家...' : `本輪：${toLabel(player.choice)}`;
       node.classList.add('locked');
     }
 
-    if (highlight.winners.includes(player.id)) node.classList.add('winner');
-    if (highlight.losers.includes(player.id)) node.classList.add('loser');
+    if (state.result?.winners.includes(player.id)) node.classList.add('winner');
+    if (state.result?.losers.includes(player.id)) node.classList.add('loser');
 
     buttons.forEach((btn) => {
-      btn.disabled = !roundActive || countdownRunning;
-      btn.addEventListener('click', () => setChoice(player.id, btn.dataset.choice));
+      const disabled = !isMe || !state.roundActive || Boolean(state.countdown);
+      btn.disabled = disabled;
+      btn.addEventListener('click', () => choose(btn.dataset.choice));
     });
 
-    placeSeat(node, index, players.length);
+    placeSeat(node, index, state.players.length);
     playerList.appendChild(node);
   });
 }
 
-render();
+function getOrCreateClientId() {
+  const key = 'rps-client-id';
+  const existing = localStorage.getItem(key);
+  if (existing) return existing;
+
+  const newId =
+    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `fallback-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+  localStorage.setItem(key, newId);
+  return newId;
+}
+
+async function postJson(url, data) {
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  return response.json();
+}
+
+async function refreshState() {
+  try {
+    const response = await fetch('/api/state');
+    state = await response.json();
+    render();
+  } catch {
+    setupMessage.textContent = '與伺服器連線中斷，稍後重試。';
+  }
+}
+
+setInterval(refreshState, 500);
+refreshState();

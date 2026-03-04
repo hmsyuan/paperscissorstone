@@ -166,6 +166,33 @@ button:disabled {
   background: rgba(65, 20, 25, 0.85);
 }
 
+.center-countdown {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  z-index: 5;
+  pointer-events: none;
+  font-size: clamp(6rem, 25vw, 14rem);
+  font-weight: 900;
+  color: #ffffff;
+  text-shadow: 0 0 18px rgba(255, 255, 255, 0.75), 0 0 42px rgba(52, 194, 255, 0.8);
+  animation: pulse-flash 0.8s ease-in-out infinite;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+@keyframes pulse-flash {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(1.12);
+  }
+}
+
 @media (max-width: 860px) {
   .table-wrap,
   .seat-ring {

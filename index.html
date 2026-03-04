@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>多人剪刀石頭布</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main class="app">
+      <header class="topbar">
+        <h1>多人剪刀石頭布</h1>
+        <p>加入玩家後，同步出拳、倒數開獎，下一輪繼續對決。</p>
+      </header>
+
+      <section class="controls">
+        <form id="add-player-form" class="add-player-form">
+          <input
+            id="nickname-input"
+            type="text"
+            maxlength="20"
+            placeholder="輸入暱稱"
+            autocomplete="off"
+            required
+          />
+          <button type="submit">加入牌桌</button>
+        </form>
+        <p id="setup-message" class="message"></p>
+      </section>
+
+      <section class="table-wrap">
+        <div class="table-surface">
+          <h2>對決牌桌</h2>
+          <div id="countdown" class="countdown">等待至少 2 位玩家出拳</div>
+          <div id="round-result" class="round-result"></div>
+          <div id="reveal-board" class="reveal-board"></div>
+          <button id="next-round-btn" class="next-btn" disabled>下一輪</button>
+        </div>
+        <div id="player-list" class="seat-ring"></div>
+        <div id="center-countdown" class="center-countdown" hidden>3</div>
+      </section>
+    </main>
+
+    <template id="player-card-template">
+      <article class="seat-card">
+        <h3 class="player-name"></h3>
+        <p class="player-status">尚未出拳</p>
+        <div class="choices">
+          <button data-choice="rock">✊</button>
+          <button data-choice="paper">✋</button>
+          <button data-choice="scissors">✌️</button>
+        </div>
+      </article>
+    </template>
+
+    <script src="script.js"></script>
+  </body>
+</html>

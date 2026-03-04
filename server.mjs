@@ -199,6 +199,16 @@ function handleClaimHost({ clientId }) {
   return { ok: true };
 }
 
+function handleReleaseHost({ clientId }) {
+  if (!clientId) return { ok: false, error: '缺少 clientId。' };
+  if (game.hostClientId !== clientId) {
+    return { ok: false, error: '只有目前主持人可以放棄主持權。' };
+  }
+  game.hostClientId = null;
+  addSystemMessage('主持人已放棄主持權，現在可重新搶主持權');
+  return { ok: true };
+}
+
 function handleKick({ clientId, targetClientId }) {
   if (clientId !== game.hostClientId) return { ok: false, error: '只有主持人可以踢人。' };
   if (!targetClientId || targetClientId === clientId) return { ok: false, error: '無法踢除此玩家。' };
@@ -249,6 +259,7 @@ createServer(async (req, res) => {
     '/api/choose',
     '/api/next-round',
     '/api/claim-host',
+    '/api/release-host',
     '/api/kick',
     '/api/chat',
   ];
@@ -261,6 +272,7 @@ createServer(async (req, res) => {
       if (urlPath === '/api/choose') result = handleChoose(payload);
       if (urlPath === '/api/next-round') result = handleNextRound(payload);
       if (urlPath === '/api/claim-host') result = handleClaimHost(payload);
+      if (urlPath === '/api/release-host') result = handleReleaseHost(payload);
       if (urlPath === '/api/kick') result = handleKick(payload);
       if (urlPath === '/api/chat') result = handleSendChat(payload);
 

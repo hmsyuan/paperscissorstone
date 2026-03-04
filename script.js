@@ -38,11 +38,13 @@ form.addEventListener('submit', async (event) => {
 });
 
 claimHostBtn.addEventListener('click', async () => {
-  const response = await postJson('/api/claim-host', { clientId });
+  const endpoint = state.hostClientId === clientId ? '/api/release-host' : '/api/claim-host';
+  const response = await postJson(endpoint, { clientId });
   if (!response.ok) return showError(response.error);
 
   state = response.state;
-  setupMessage.textContent = '你已取得主持權。';
+  setupMessage.textContent =
+    endpoint === '/api/claim-host' ? '你已取得主持權。' : '你已放棄主持權。';
   render();
 });
 
@@ -168,7 +170,7 @@ function render() {
 
   claimHostBtn.disabled = !myPlayer || (Boolean(state.hostClientId) && !isHost);
   if (isHost) {
-    claimHostBtn.textContent = '你是主持人';
+    claimHostBtn.textContent = '放棄主持權';
   } else if (state.hostClientId) {
     claimHostBtn.textContent = '主持權已有人';
   } else {

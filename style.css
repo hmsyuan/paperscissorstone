@@ -7,6 +7,11 @@
   box-sizing: border-box;
 }
 
+[hidden] {
+  display: none !important;
+}
+
+
 body {
   margin: 0;
   min-height: 100vh;
@@ -114,6 +119,47 @@ button:disabled {
 .next-btn {
   background: #423f80;
 }
+
+.reveal-board {
+  margin: 10px 0 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 8px;
+}
+
+.reveal-item {
+  border: 1px solid rgba(161, 197, 237, 0.55);
+  border-radius: 12px;
+  background: rgba(8, 26, 40, 0.72);
+  padding: 8px;
+}
+
+.reveal-item.winner {
+  border-color: #36da9c;
+  background: rgba(9, 51, 35, 0.88);
+}
+
+.reveal-item.loser {
+  border-color: #ff7f7f;
+  background: rgba(65, 20, 25, 0.88);
+}
+
+.reveal-name {
+  font-size: 0.82rem;
+  color: #d8e8ff;
+}
+
+.reveal-icon {
+  font-size: 2.5rem;
+  line-height: 1.1;
+  font-weight: 900;
+}
+
+.reveal-label {
+  font-size: 0.8rem;
+  color: #cde7ff;
+}
+
 
 .seat-ring {
   position: relative;

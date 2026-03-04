@@ -7,6 +7,7 @@ const roundResultEl = document.getElementById('round-result');
 const nextRoundBtn = document.getElementById('next-round-btn');
 const playerTemplate = document.getElementById('player-card-template');
 const centerCountdownEl = document.getElementById('center-countdown');
+const revealBoardEl = document.getElementById('reveal-board');
 
 const clientId = getOrCreateClientId();
 let state = { players: [], roundActive: true, countdown: null, result: null };
@@ -60,6 +61,12 @@ function toLabel(choice) {
   return '✌️ 剪刀';
 }
 
+function toIcon(choice) {
+  if (choice === 'rock') return '✊';
+  if (choice === 'paper') return '✋';
+  return '✌️';
+}
+
 function placeSeat(node, index, total) {
   if (total === 1) {
     node.style.left = '50%';
@@ -77,6 +84,35 @@ function placeSeat(node, index, total) {
   node.style.left = `${x}%`;
   node.style.top = `${y}%`;
   node.style.transform = 'translate(-50%, -50%)';
+}
+
+function renderRevealBoard(myPlayer) {
+  revealBoardEl.innerHTML = '';
+
+  if (!state.result) return;
+
+  state.players.forEach((player) => {
+    const item = document.createElement('div');
+    item.className = 'reveal-item';
+    if (state.result.winners.includes(player.id)) item.classList.add('winner');
+    if (state.result.losers.includes(player.id)) item.classList.add('loser');
+
+    const name = document.createElement('div');
+    name.className = 'reveal-name';
+    const isMe = myPlayer && myPlayer.id === player.id;
+    name.textContent = isMe ? `${player.nickname}（你）` : player.nickname;
+
+    const icon = document.createElement('div');
+    icon.className = 'reveal-icon';
+    icon.textContent = toIcon(player.choice);
+
+    const label = document.createElement('div');
+    label.className = 'reveal-label';
+    label.textContent = toLabel(player.choice);
+
+    item.append(name, icon, label);
+    revealBoardEl.appendChild(item);
+  });
 }
 
 function render() {
@@ -107,6 +143,8 @@ function render() {
   } else {
     roundResultEl.textContent = '';
   }
+
+  renderRevealBoard(myPlayer);
 
   state.players.forEach((player, index) => {
     const node = playerTemplate.content.firstElementChild.cloneNode(true);

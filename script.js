@@ -110,8 +110,8 @@ function placeSeat(node, index, total) {
   }
 
   const angle = (-90 + (360 / total) * index) * (Math.PI / 180);
-  const radiusX = 40;
-  const radiusY = 34;
+  const radiusX = 47;
+  const radiusY = 41;
   const x = 50 + Math.cos(angle) * radiusX;
   const y = 50 + Math.sin(angle) * radiusY;
 

@@ -61,7 +61,8 @@ button:disabled { cursor: not-allowed; opacity: 0.6; }
 
 .table-wrap {
   position: relative;
-  min-height: 560px;
+  height: 560px;
+  max-height: 560px;
   border-radius: 28px;
   background: radial-gradient(circle at center, #1b7b5d 0%, #0a4032 65%);
   border: 6px solid #744f2c;
@@ -74,9 +75,10 @@ button:disabled { cursor: not-allowed; opacity: 0.6; }
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
-  width: min(520px, 90%);
+  width: min(460px, 86%);
   border-radius: 20px;
-  background: rgba(8, 24, 20, 0.6);
+  background: rgba(8, 24, 20, 0.92);
+  backdrop-filter: blur(3px);
   border: 1px solid rgba(217, 243, 233, 0.25);
   text-align: center;
   padding: 18px 16px;
@@ -133,13 +135,15 @@ button:disabled { cursor: not-allowed; opacity: 0.6; }
   padding: 12px;
   display: flex;
   flex-direction: column;
-  min-height: 560px;
+  height: 560px;
+  max-height: 560px;
 }
 
 .chat-panel h3 { margin: 2px 0 10px; }
 .chat-list {
   flex: 1;
-  overflow: auto;
+  overflow-y: auto;
+  min-height: 0;
   border: 1px solid rgba(108, 144, 188, 0.35);
   border-radius: 10px;
   padding: 8px;
@@ -177,7 +181,7 @@ button:disabled { cursor: not-allowed; opacity: 0.6; }
 
 @media (max-width: 1024px) {
   .game-layout { grid-template-columns: 1fr; }
-  .chat-panel { min-height: 300px; }
+  .chat-panel { height: 320px; max-height: 320px; }
 }
 
 @media (max-width: 860px) {

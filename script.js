@@ -8,9 +8,20 @@ const nextRoundBtn = document.getElementById('next-round-btn');
 const playerTemplate = document.getElementById('player-card-template');
 const centerCountdownEl = document.getElementById('center-countdown');
 const revealBoardEl = document.getElementById('reveal-board');
+const claimHostBtn = document.getElementById('claim-host-btn');
+const chatListEl = document.getElementById('chat-list');
+const chatForm = document.getElementById('chat-form');
+const chatInput = document.getElementById('chat-input');
 
 const clientId = getOrCreateClientId();
-let state = { players: [], roundActive: true, countdown: null, result: null };
+let state = {
+  players: [],
+  roundActive: true,
+  countdown: null,
+  result: null,
+  hostClientId: null,
+  chatMessages: [],
+};
 
 form.addEventListener('submit', async (event) => {
   event.preventDefault();
@@ -18,10 +29,7 @@ form.addEventListener('submit', async (event) => {
   if (!nickname) return;
 
   const response = await postJson('/api/join', { clientId, nickname });
-  if (!response.ok) {
-    setupMessage.textContent = response.error;
-    return;
-  }
+  if (!response.ok) return showError(response.error);
 
   setupMessage.textContent = `${nickname} 已加入牌桌。`;
   nicknameInput.value = '';
@@ -29,23 +37,47 @@ form.addEventListener('submit', async (event) => {
   render();
 });
 
+claimHostBtn.addEventListener('click', async () => {
+  const response = await postJson('/api/claim-host', { clientId });
+  if (!response.ok) return showError(response.error);
+
+  state = response.state;
+  setupMessage.textContent = '你已取得主持權。';
+  render();
+});
+
 nextRoundBtn.addEventListener('click', async () => {
   const response = await postJson('/api/next-round', { clientId });
-  if (!response.ok) {
-    setupMessage.textContent = response.error;
-    return;
-  }
+  if (!response.ok) return showError(response.error);
 
+  state = response.state;
+  render();
+});
+
+chatForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const text = chatInput.value.trim();
+  if (!text) return;
+
+  const response = await postJson('/api/chat', { clientId, text });
+  if (!response.ok) return showError(response.error);
+
+  chatInput.value = '';
   state = response.state;
   render();
 });
 
 async function choose(choice) {
   const response = await postJson('/api/choose', { clientId, choice });
-  if (!response.ok) {
-    setupMessage.textContent = response.error;
-    return;
-  }
+  if (!response.ok) return showError(response.error);
+
+  state = response.state;
+  render();
+}
+
+async function kickPlayer(targetClientId) {
+  const response = await postJson('/api/kick', { clientId, targetClientId });
+  if (!response.ok) return showError(response.error);
 
   state = response.state;
   render();
@@ -88,7 +120,6 @@ function placeSeat(node, index, total) {
 
 function renderRevealBoard(myPlayer) {
   revealBoardEl.innerHTML = '';
-
   if (!state.result) return;
 
   state.players.forEach((player) => {
@@ -97,29 +128,52 @@ function renderRevealBoard(myPlayer) {
     if (state.result.winners.includes(player.id)) item.classList.add('winner');
     if (state.result.losers.includes(player.id)) item.classList.add('loser');
 
-    const name = document.createElement('div');
-    name.className = 'reveal-name';
     const isMe = myPlayer && myPlayer.id === player.id;
-    name.textContent = isMe ? `${player.nickname}（你）` : player.nickname;
-
-    const icon = document.createElement('div');
-    icon.className = 'reveal-icon';
-    icon.textContent = toIcon(player.choice);
-
-    const label = document.createElement('div');
-    label.className = 'reveal-label';
-    label.textContent = toLabel(player.choice);
-
-    item.append(name, icon, label);
+    item.innerHTML = `
+      <div class="reveal-name">${isMe ? `${player.nickname}（你）` : player.nickname}</div>
+      <div class="reveal-icon">${toIcon(player.choice)}</div>
+      <div class="reveal-label">${toLabel(player.choice)}</div>
+    `;
     revealBoardEl.appendChild(item);
   });
 }
 
+function renderChat(myPlayer) {
+  chatListEl.innerHTML = '';
+  state.chatMessages.forEach((msg) => {
+    const row = document.createElement('div');
+    row.className = 'chat-item';
+
+    const mine = msg.clientId && myPlayer && msg.clientId === myPlayer.clientId;
+    if (mine) row.classList.add('mine');
+    if (msg.sender === 'system') row.classList.add('system');
+
+    const sender = msg.sender === 'system' ? '系統' : msg.sender;
+    row.innerHTML = `<span class="chat-sender">${sender}</span><span class="chat-text">${msg.text}</span>`;
+    chatListEl.appendChild(row);
+  });
+  chatListEl.scrollTop = chatListEl.scrollHeight;
+}
+
+function showError(message) {
+  setupMessage.textContent = message || '發生錯誤';
+}
+
 function render() {
   const myPlayer = getMyPlayer();
+  const isHost = state.hostClientId === clientId;
 
   playerList.innerHTML = '';
   nextRoundBtn.disabled = state.roundActive;
+
+  claimHostBtn.disabled = !myPlayer || (Boolean(state.hostClientId) && !isHost);
+  if (isHost) {
+    claimHostBtn.textContent = '你是主持人';
+  } else if (state.hostClientId) {
+    claimHostBtn.textContent = '主持權已有人';
+  } else {
+    claimHostBtn.textContent = '搶主持權';
+  }
 
   if (state.countdown) {
     countdownEl.textContent = '全員就緒，準備開獎...';
@@ -127,33 +181,30 @@ function render() {
     centerCountdownEl.textContent = String(state.countdown);
   } else {
     centerCountdownEl.hidden = true;
-    if (state.players.length < 2) {
-      countdownEl.textContent = '等待至少 2 位玩家出拳';
-    } else if (state.roundActive) {
-      countdownEl.textContent = '等待玩家出拳';
-    } else {
-      countdownEl.textContent = '開獎完成！';
-    }
+    if (state.players.length < 2) countdownEl.textContent = '等待至少 2 位玩家出拳';
+    else if (state.roundActive) countdownEl.textContent = '等待玩家出拳';
+    else countdownEl.textContent = '開獎完成！';
   }
 
-  if (state.result) {
-    roundResultEl.textContent = state.result.roundResultText;
-  } else if (state.players.length === 0) {
-    roundResultEl.textContent = '目前沒有玩家，請先加入。';
-  } else {
-    roundResultEl.textContent = '';
-  }
+  if (state.result) roundResultEl.textContent = state.result.roundResultText;
+  else if (state.players.length === 0) roundResultEl.textContent = '目前沒有玩家，請先加入。';
+  else roundResultEl.textContent = isHost ? '你是主持人，可踢人與控場。' : '';
 
   renderRevealBoard(myPlayer);
+  renderChat(myPlayer);
 
   state.players.forEach((player, index) => {
     const node = playerTemplate.content.firstElementChild.cloneNode(true);
     const nameEl = node.querySelector('.player-name');
     const statusEl = node.querySelector('.player-status');
-    const buttons = node.querySelectorAll('button');
+    const buttons = node.querySelectorAll('.choices button');
+    const kickBtn = node.querySelector('.kick-btn');
 
     const isMe = myPlayer && myPlayer.id === player.id;
-    nameEl.textContent = isMe ? `${player.nickname}（你）` : player.nickname;
+    const isHostPlayer = player.clientId === state.hostClientId;
+    nameEl.textContent = `${isMe ? `${player.nickname}（你）` : player.nickname}${
+      isHostPlayer ? ' 👑' : ''
+    }`;
 
     if (player.choice) {
       statusEl.textContent = state.roundActive ? '已就緒，等待其他玩家...' : `本輪：${toLabel(player.choice)}`;
@@ -164,10 +215,13 @@ function render() {
     if (state.result?.losers.includes(player.id)) node.classList.add('loser');
 
     buttons.forEach((btn) => {
-      const disabled = !isMe || !state.roundActive || Boolean(state.countdown);
-      btn.disabled = disabled;
+      btn.disabled = !isMe || !state.roundActive || Boolean(state.countdown);
       btn.addEventListener('click', () => choose(btn.dataset.choice));
     });
+
+    const canKick = isHost && !isMe;
+    kickBtn.hidden = !canKick;
+    if (canKick) kickBtn.addEventListener('click', () => kickPlayer(player.clientId));
 
     placeSeat(node, index, state.players.length);
     playerList.appendChild(node);
@@ -203,7 +257,7 @@ async function refreshState() {
     state = await response.json();
     render();
   } catch {
-    setupMessage.textContent = '與伺服器連線中斷，稍後重試。';
+    showError('與伺服器連線中斷，稍後重試。');
   }
 }
 

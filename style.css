@@ -11,7 +11,6 @@
   display: none !important;
 }
 
-
 body {
   margin: 0;
   min-height: 100vh;
@@ -19,33 +18,17 @@ body {
 }
 
 .app {
-  max-width: 1100px;
+  max-width: 1320px;
   margin: 0 auto;
   padding: 24px 16px 40px;
 }
 
-.topbar h1 {
-  margin: 0;
-}
+.topbar h1 { margin: 0; }
+.topbar p { margin: 8px 0 0; color: #c4d7ef; }
+.controls { margin-top: 16px; }
 
-.topbar p {
-  margin: 8px 0 0;
-  color: #c4d7ef;
-}
-
-.controls {
-  margin-top: 16px;
-}
-
-.add-player-form {
-  display: flex;
-  gap: 10px;
-}
-
-input,
-button {
-  font: inherit;
-}
+.add-player-form { display: flex; gap: 10px; }
+input, button { font: inherit; }
 
 input {
   flex: 1;
@@ -64,20 +47,19 @@ button {
   cursor: pointer;
   padding: 10px 16px;
 }
+button:disabled { cursor: not-allowed; opacity: 0.6; }
 
-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.6;
-}
+.host-btn { background: #8a5fe8; }
+.message { min-height: 22px; margin: 8px 4px; color: #9fc2ea; }
 
-.message {
-  min-height: 22px;
-  margin: 8px 4px;
-  color: #9fc2ea;
+.game-layout {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 14px;
 }
 
 .table-wrap {
-  margin-top: 10px;
   position: relative;
   min-height: 560px;
   border-radius: 28px;
@@ -101,24 +83,9 @@ button:disabled {
   z-index: 2;
 }
 
-.table-surface h2 {
-  margin: 0 0 8px;
-}
-
-.countdown {
-  font-size: 1.5rem;
-  font-weight: 700;
-}
-
-.round-result {
-  margin: 10px 0;
-  color: #ddf8ea;
-  min-height: 24px;
-}
-
-.next-btn {
-  background: #423f80;
-}
+.countdown { font-size: 1.5rem; font-weight: 700; }
+.round-result { margin: 10px 0; color: #ddf8ea; min-height: 24px; }
+.next-btn { background: #423f80; }
 
 .reveal-board {
   margin: 10px 0 12px;
@@ -133,39 +100,13 @@ button:disabled {
   background: rgba(8, 26, 40, 0.72);
   padding: 8px;
 }
+.reveal-item.winner { border-color: #36da9c; background: rgba(9, 51, 35, 0.88); }
+.reveal-item.loser { border-color: #ff7f7f; background: rgba(65, 20, 25, 0.88); }
+.reveal-name { font-size: 0.82rem; color: #d8e8ff; }
+.reveal-icon { font-size: 2.5rem; line-height: 1.1; font-weight: 900; }
+.reveal-label { font-size: 0.8rem; color: #cde7ff; }
 
-.reveal-item.winner {
-  border-color: #36da9c;
-  background: rgba(9, 51, 35, 0.88);
-}
-
-.reveal-item.loser {
-  border-color: #ff7f7f;
-  background: rgba(65, 20, 25, 0.88);
-}
-
-.reveal-name {
-  font-size: 0.82rem;
-  color: #d8e8ff;
-}
-
-.reveal-icon {
-  font-size: 2.5rem;
-  line-height: 1.1;
-  font-weight: 900;
-}
-
-.reveal-label {
-  font-size: 0.8rem;
-  color: #cde7ff;
-}
-
-
-.seat-ring {
-  position: relative;
-  min-height: 560px;
-}
-
+.seat-ring { position: relative; min-height: 560px; }
 .seat-card {
   position: absolute;
   width: 180px;
@@ -175,42 +116,44 @@ button:disabled {
   padding: 10px;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
 }
+.seat-card h3 { margin: 0; font-size: 1rem; }
+.player-status { min-height: 20px; color: #bbcff0; margin: 8px 0; font-size: 0.9rem; }
+.choices { display: flex; gap: 6px; }
+.choices button { flex: 1; padding: 6px; }
+.kick-btn { width: 100%; margin-top: 8px; background: #b33c3c; border-radius: 8px; padding: 6px 8px; }
 
-.seat-card h3 {
-  margin: 0;
-  font-size: 1rem;
-}
+.seat-card.locked { border-color: #7ca6ea; }
+.seat-card.winner { border-color: #36da9c; background: rgba(9, 51, 35, 0.85); }
+.seat-card.loser { border-color: #ff7f7f; background: rgba(65, 20, 25, 0.85); }
 
-.player-status {
-  min-height: 20px;
-  color: #bbcff0;
-  margin: 8px 0;
-  font-size: 0.9rem;
-}
-
-.choices {
+.chat-panel {
+  border-radius: 16px;
+  border: 1px solid #355278;
+  background: rgba(7, 23, 41, 0.85);
+  padding: 12px;
   display: flex;
-  gap: 6px;
+  flex-direction: column;
+  min-height: 560px;
 }
 
-.choices button {
+.chat-panel h3 { margin: 2px 0 10px; }
+.chat-list {
   flex: 1;
-  padding: 6px;
+  overflow: auto;
+  border: 1px solid rgba(108, 144, 188, 0.35);
+  border-radius: 10px;
+  padding: 8px;
+  background: rgba(8, 17, 29, 0.8);
 }
+.chat-item { margin-bottom: 8px; font-size: 0.9rem; }
+.chat-item.system { opacity: 0.8; }
+.chat-item.mine .chat-sender { color: #8ad4ff; }
+.chat-sender { display: block; font-size: 0.75rem; color: #b8d8ff; }
+.chat-text { color: #eef6ff; word-break: break-word; }
 
-.seat-card.locked {
-  border-color: #7ca6ea;
-}
-
-.seat-card.winner {
-  border-color: #36da9c;
-  background: rgba(9, 51, 35, 0.85);
-}
-
-.seat-card.loser {
-  border-color: #ff7f7f;
-  background: rgba(65, 20, 25, 0.85);
-}
+.chat-form { display: flex; gap: 6px; margin-top: 10px; }
+.chat-form input { border-radius: 8px; }
+.chat-form button { border-radius: 8px; padding: 8px 12px; }
 
 .center-countdown {
   position: absolute;
@@ -228,24 +171,16 @@ button:disabled {
 }
 
 @keyframes pulse-flash {
-  0%,
-  100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.35;
-    transform: scale(1.12);
-  }
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.35; transform: scale(1.12); }
+}
+
+@media (max-width: 1024px) {
+  .game-layout { grid-template-columns: 1fr; }
+  .chat-panel { min-height: 300px; }
 }
 
 @media (max-width: 860px) {
-  .table-wrap,
-  .seat-ring {
-    min-height: 680px;
-  }
-
-  .seat-card {
-    width: 160px;
-  }
+  .table-wrap, .seat-ring { min-height: 680px; }
+  .seat-card { width: 160px; }
 }

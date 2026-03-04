@@ -23,6 +23,9 @@ const game = {
   roundActive: true,
   countdownStartAt: null,
   result: null,
+  hostClientId: null,
+  chatMessages: [],
+  nextChatId: 1,
 };
 
 function sendJson(res, statusCode, payload) {
@@ -36,15 +39,10 @@ function readJson(req) {
     let body = '';
     req.on('data', (chunk) => {
       body += chunk;
-      if (body.length > 1_000_000) {
-        reject(new Error('payload_too_large'));
-      }
+      if (body.length > 1_000_000) reject(new Error('payload_too_large'));
     });
     req.on('end', () => {
-      if (!body) {
-        resolve({});
-        return;
-      }
+      if (!body) return resolve({});
       try {
         resolve(JSON.parse(body));
       } catch {
@@ -138,7 +136,18 @@ function getPublicState() {
     roundActive: game.roundActive,
     countdown,
     result: game.result,
+    hostClientId: game.hostClientId,
+    chatMessages: game.chatMessages,
   };
+}
+
+function getPlayerByClientId(clientId) {
+  return game.players.find((p) => p.clientId === clientId);
+}
+
+function addSystemMessage(text) {
+  game.chatMessages.push({ id: game.nextChatId++, sender: 'system', text, createdAt: Date.now() });
+  if (game.chatMessages.length > 100) game.chatMessages.shift();
 }
 
 function handleJoin({ clientId, nickname }) {
@@ -148,13 +157,14 @@ function handleJoin({ clientId, nickname }) {
   const duplicate = game.players.find((p) => p.nickname === cleanNickname && p.clientId !== clientId);
   if (duplicate) return { ok: false, error: '暱稱重複，請使用其他名稱。' };
 
-  const mine = game.players.find((p) => p.clientId === clientId);
+  const mine = getPlayerByClientId(clientId);
   if (mine) {
     mine.nickname = cleanNickname;
     return { ok: true };
   }
 
   game.players.push({ id: game.nextPlayerId++, clientId, nickname: cleanNickname, choice: null });
+  addSystemMessage(`${cleanNickname} 加入了牌桌`);
   return { ok: true };
 }
 
@@ -163,7 +173,7 @@ function handleChoose({ clientId, choice }) {
   if (!game.roundActive || game.countdownStartAt) return { ok: false, error: '目前無法出拳。' };
   if (!['rock', 'paper', 'scissors'].includes(choice)) return { ok: false, error: '無效的出拳。' };
 
-  const mine = game.players.find((p) => p.clientId === clientId);
+  const mine = getPlayerByClientId(clientId);
   if (!mine) return { ok: false, error: '請先加入牌桌。' };
 
   mine.choice = choice;
@@ -179,6 +189,53 @@ function handleNextRound() {
   return { ok: true };
 }
 
+function handleClaimHost({ clientId }) {
+  if (!clientId) return { ok: false, error: '缺少 clientId。' };
+  if (!getPlayerByClientId(clientId)) return { ok: false, error: '請先加入牌桌。' };
+  if (game.hostClientId && game.hostClientId !== clientId) {
+    return { ok: false, error: '主持權已被其他人取得。' };
+  }
+  game.hostClientId = clientId;
+  return { ok: true };
+}
+
+function handleKick({ clientId, targetClientId }) {
+  if (clientId !== game.hostClientId) return { ok: false, error: '只有主持人可以踢人。' };
+  if (!targetClientId || targetClientId === clientId) return { ok: false, error: '無法踢除此玩家。' };
+
+  const target = getPlayerByClientId(targetClientId);
+  if (!target) return { ok: false, error: '找不到玩家。' };
+
+  game.players = game.players.filter((p) => p.clientId !== targetClientId);
+  addSystemMessage(`${target.nickname} 被主持人移出牌桌`);
+
+  if (game.players.length < 2) {
+    game.roundActive = true;
+    game.countdownStartAt = null;
+    game.result = null;
+    game.players = game.players.map((p) => ({ ...p, choice: null }));
+  }
+
+  return { ok: true };
+}
+
+function handleSendChat({ clientId, text }) {
+  const sender = getPlayerByClientId(clientId);
+  const cleanText = String(text || '').trim().slice(0, 120);
+  if (!sender) return { ok: false, error: '請先加入牌桌。' };
+  if (!cleanText) return { ok: false, error: '訊息不可空白。' };
+
+  game.chatMessages.push({
+    id: game.nextChatId++,
+    sender: sender.nickname,
+    clientId,
+    text: cleanText,
+    createdAt: Date.now(),
+  });
+  if (game.chatMessages.length > 100) game.chatMessages.shift();
+  return { ok: true };
+}
+
 createServer(async (req, res) => {
   const urlPath = (req.url || '/').split('?')[0];
 
@@ -187,24 +244,30 @@ createServer(async (req, res) => {
     return;
   }
 
-  if (req.method === 'POST' && ['/api/join', '/api/choose', '/api/next-round'].includes(urlPath)) {
+  const postApis = [
+    '/api/join',
+    '/api/choose',
+    '/api/next-round',
+    '/api/claim-host',
+    '/api/kick',
+    '/api/chat',
+  ];
+
+  if (req.method === 'POST' && postApis.includes(urlPath)) {
     try {
       const payload = await readJson(req);
       let result;
       if (urlPath === '/api/join') result = handleJoin(payload);
       if (urlPath === '/api/choose') result = handleChoose(payload);
       if (urlPath === '/api/next-round') result = handleNextRound(payload);
+      if (urlPath === '/api/claim-host') result = handleClaimHost(payload);
+      if (urlPath === '/api/kick') result = handleKick(payload);
+      if (urlPath === '/api/chat') result = handleSendChat(payload);
 
-      if (!result.ok) {
-        sendJson(res, 400, result);
-        return;
-      }
-
-      sendJson(res, 200, { ok: true, state: getPublicState() });
-      return;
-    } catch (error) {
-      sendJson(res, 400, { ok: false, error: '請求格式錯誤。' });
-      return;
+      if (!result.ok) return sendJson(res, 400, result);
+      return sendJson(res, 200, { ok: true, state: getPublicState() });
+    } catch {
+      return sendJson(res, 400, { ok: false, error: '請求格式錯誤。' });
     }
   }
 

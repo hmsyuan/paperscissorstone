@@ -19,6 +19,14 @@
           <button type="submit">加入牌桌</button>
           <button type="button" id="claim-host-btn" class="host-btn">搶主持權</button>
         </form>
+        <div class="host-controls">
+          <label for="round-mode-select">回合模式</label>
+          <select id="round-mode-select">
+            <option value="all">全員下一輪</option>
+            <option value="losers">只保留輸家續戰</option>
+            <option value="winners">只保留贏家續戰</option>
+          </select>
+        </div>
         <p id="setup-message" class="message"></p>
       </section>
 
@@ -55,7 +63,7 @@
           <button data-choice="paper">✋</button>
           <button data-choice="scissors">✌️</button>
         </div>
-        <button type="button" class="kick-btn" hidden>踢出</button>
+        <button type="button" class="kick-btn" hidden>踢出玩家</button>
       </article>
     </template>
 

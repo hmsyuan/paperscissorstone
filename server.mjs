@@ -24,6 +24,7 @@ const game = {
   countdownStartAt: null,
   result: null,
   hostClientId: null,
+  roundMode: 'all',
   chatMessages: [],
   nextChatId: 1,
 };
@@ -87,10 +88,13 @@ function buildResult() {
   return {
     type: 'win',
     reason: '',
-    roundResultText: `勝利手勢：${toLabel(result.winningChoice)}；贏家：${game.players
+    roundResultText: `😄 贏家：${game.players
       .filter((p) => winners.includes(p.id))
       .map((p) => p.nickname)
-      .join('、')}`,
+      .join('、')}｜😢 輸家：${game.players
+      .filter((p) => losers.includes(p.id))
+      .map((p) => p.nickname)
+      .join('、')}（勝利手勢 ${toLabel(result.winningChoice)}）`,
     winners,
     losers,
     winningChoice: result.winningChoice,
@@ -137,6 +141,7 @@ function getPublicState() {
     countdown,
     result: game.result,
     hostClientId: game.hostClientId,
+    roundMode: game.roundMode,
     chatMessages: game.chatMessages,
   };
 }
@@ -182,10 +187,52 @@ function handleChoose({ clientId, choice }) {
 }
 
 function handleNextRound() {
-  game.players = game.players.map((p) => ({ ...p, choice: null }));
+  let nextPlayers = game.players;
+
+  if (game.result && game.result.type === 'win' && game.roundMode !== 'all') {
+    const survivorIds = game.roundMode === 'losers' ? game.result.losers : game.result.winners;
+    nextPlayers = game.players.filter((p) => survivorIds.includes(p.id));
+  }
+
+  nextPlayers = nextPlayers.map((p) => ({ ...p, choice: null }));
+  game.players = nextPlayers;
+
+  if (game.players.length < 2) {
+    game.roundActive = false;
+    if (game.players.length === 1 && game.roundMode !== 'all') {
+      const finalPlayer = game.players[0];
+      const isLoserMode = game.roundMode === 'losers';
+      game.result = {
+        type: 'final',
+        reason: '',
+        roundResultText: isLoserMode
+          ? `🏁 最終輸家：${finalPlayer.nickname} 😢`
+          : `🏆 最終贏家：${finalPlayer.nickname} 😄`,
+        winners: isLoserMode ? [] : [finalPlayer.id],
+        losers: isLoserMode ? [finalPlayer.id] : [],
+        winningChoice: null,
+      };
+    } else {
+      game.result = null;
+    }
+    game.countdownStartAt = null;
+    return { ok: true };
+  }
+
   game.roundActive = true;
   game.countdownStartAt = null;
   game.result = null;
+  return { ok: true };
+}
+
+function handleSetRoundMode({ clientId, roundMode }) {
+  if (clientId !== game.hostClientId) return { ok: false, error: '只有主持人可以設定回合模式。' };
+  if (!['all', 'losers', 'winners'].includes(roundMode)) {
+    return { ok: false, error: '無效的回合模式。' };
+  }
+
+  game.roundMode = roundMode;
+  addSystemMessage(`主持人將回合模式設為：${roundMode}`);
   return { ok: true };
 }
 
@@ -260,6 +307,7 @@ createServer(async (req, res) => {
     '/api/next-round',
     '/api/claim-host',
     '/api/release-host',
+    '/api/set-round-mode',
     '/api/kick',
     '/api/chat',
   ];
@@ -273,6 +321,7 @@ createServer(async (req, res) => {
       if (urlPath === '/api/next-round') result = handleNextRound(payload);
       if (urlPath === '/api/claim-host') result = handleClaimHost(payload);
       if (urlPath === '/api/release-host') result = handleReleaseHost(payload);
+      if (urlPath === '/api/set-round-mode') result = handleSetRoundMode(payload);
       if (urlPath === '/api/kick') result = handleKick(payload);
       if (urlPath === '/api/chat') result = handleSendChat(payload);
 

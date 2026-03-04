@@ -12,6 +12,7 @@ const claimHostBtn = document.getElementById('claim-host-btn');
 const chatListEl = document.getElementById('chat-list');
 const chatForm = document.getElementById('chat-form');
 const chatInput = document.getElementById('chat-input');
+const roundModeSelect = document.getElementById('round-mode-select');
 
 const clientId = getOrCreateClientId();
 let state = {
@@ -20,6 +21,7 @@ let state = {
   countdown: null,
   result: null,
   hostClientId: null,
+  roundMode: 'all',
   chatMessages: [],
 };
 
@@ -45,6 +47,18 @@ claimHostBtn.addEventListener('click', async () => {
   state = response.state;
   setupMessage.textContent =
     endpoint === '/api/claim-host' ? '你已取得主持權。' : '你已放棄主持權。';
+  render();
+});
+
+roundModeSelect.addEventListener('change', async () => {
+  const response = await postJson('/api/set-round-mode', {
+    clientId,
+    roundMode: roundModeSelect.value,
+  });
+  if (!response.ok) return showError(response.error);
+
+  state = response.state;
+  setupMessage.textContent = '已更新回合模式。';
   render();
 });
 
@@ -104,14 +118,14 @@ function toIcon(choice) {
 function placeSeat(node, index, total) {
   if (total === 1) {
     node.style.left = '50%';
-    node.style.top = '12%';
+    node.style.top = '14%';
     node.style.transform = 'translate(-50%, 0)';
     return;
   }
 
   const angle = (-90 + (360 / total) * index) * (Math.PI / 180);
-  const radiusX = 47;
-  const radiusY = 41;
+  const radiusX = 44;
+  const radiusY = 38;
   const x = 50 + Math.cos(angle) * radiusX;
   const y = 50 + Math.sin(angle) * radiusY;
 
@@ -127,14 +141,22 @@ function renderRevealBoard(myPlayer) {
   state.players.forEach((player) => {
     const item = document.createElement('div');
     item.className = 'reveal-item';
-    if (state.result.winners.includes(player.id)) item.classList.add('winner');
-    if (state.result.losers.includes(player.id)) item.classList.add('loser');
+
+    let mood = '😐';
+    if (state.result.winners.includes(player.id)) {
+      item.classList.add('winner');
+      mood = '😄';
+    }
+    if (state.result.losers.includes(player.id)) {
+      item.classList.add('loser');
+      mood = '😢';
+    }
 
     const isMe = myPlayer && myPlayer.id === player.id;
     item.innerHTML = `
       <div class="reveal-name">${isMe ? `${player.nickname}（你）` : player.nickname}</div>
       <div class="reveal-icon">${toIcon(player.choice)}</div>
-      <div class="reveal-label">${toLabel(player.choice)}</div>
+      <div class="reveal-label">${mood} ${toLabel(player.choice)}</div>
     `;
     revealBoardEl.appendChild(item);
   });
@@ -161,6 +183,12 @@ function showError(message) {
   setupMessage.textContent = message || '發生錯誤';
 }
 
+function modeText(mode) {
+  if (mode === 'losers') return '只保留輸家續戰';
+  if (mode === 'winners') return '只保留贏家續戰';
+  return '全員下一輪';
+}
+
 function render() {
   const myPlayer = getMyPlayer();
   const isHost = state.hostClientId === clientId;
@@ -169,13 +197,12 @@ function render() {
   nextRoundBtn.disabled = state.roundActive;
 
   claimHostBtn.disabled = !myPlayer || (Boolean(state.hostClientId) && !isHost);
-  if (isHost) {
-    claimHostBtn.textContent = '放棄主持權';
-  } else if (state.hostClientId) {
-    claimHostBtn.textContent = '主持權已有人';
-  } else {
-    claimHostBtn.textContent = '搶主持權';
-  }
+  if (isHost) claimHostBtn.textContent = '放棄主持權';
+  else if (state.hostClientId) claimHostBtn.textContent = '主持權已有人';
+  else claimHostBtn.textContent = '搶主持權';
+
+  roundModeSelect.value = state.roundMode || 'all';
+  roundModeSelect.disabled = !isHost;
 
   if (state.countdown) {
     countdownEl.textContent = '全員就緒，準備開獎...';
@@ -188,9 +215,13 @@ function render() {
     else countdownEl.textContent = '開獎完成！';
   }
 
-  if (state.result) roundResultEl.textContent = state.result.roundResultText;
-  else if (state.players.length === 0) roundResultEl.textContent = '目前沒有玩家，請先加入。';
-  else roundResultEl.textContent = isHost ? '你是主持人，可踢人與控場。' : '';
+  if (state.result) {
+    roundResultEl.textContent = state.result.roundResultText;
+  } else if (state.players.length === 0) {
+    roundResultEl.textContent = '目前沒有玩家，請先加入。';
+  } else {
+    roundResultEl.textContent = `目前模式：${modeText(state.roundMode)} ${isHost ? '（你可切換）' : ''}`;
+  }
 
   renderRevealBoard(myPlayer);
   renderChat(myPlayer);
@@ -204,12 +235,17 @@ function render() {
 
     const isMe = myPlayer && myPlayer.id === player.id;
     const isHostPlayer = player.clientId === state.hostClientId;
-    nameEl.textContent = `${isMe ? `${player.nickname}（你）` : player.nickname}${
-      isHostPlayer ? ' 👑' : ''
-    }`;
+    nameEl.textContent = `${isMe ? `${player.nickname}（你）` : player.nickname}${isHostPlayer ? ' 👑' : ''}`;
 
     if (player.choice) {
-      statusEl.textContent = state.roundActive ? '已就緒，等待其他玩家...' : `本輪：${toLabel(player.choice)}`;
+      const mood = state.result?.winners.includes(player.id)
+        ? '😄'
+        : state.result?.losers.includes(player.id)
+          ? '😢'
+          : '😐';
+      statusEl.textContent = state.roundActive
+        ? '已就緒，等待其他玩家...'
+        : `${mood} 本輪：${toLabel(player.choice)}`;
       node.classList.add('locked');
     }
 

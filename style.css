@@ -52,6 +52,22 @@ button:disabled { cursor: not-allowed; opacity: 0.6; }
 .host-btn { background: #8a5fe8; }
 .message { min-height: 22px; margin: 8px 4px; color: #9fc2ea; }
 
+.host-controls {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.host-controls select {
+  border: 1px solid #3f5d82;
+  border-radius: 8px;
+  background: #0d243d;
+  color: #fff;
+  padding: 6px 10px;
+}
+
+
 .game-layout {
   margin-top: 10px;
   display: grid;
@@ -75,7 +91,7 @@ button:disabled { cursor: not-allowed; opacity: 0.6; }
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%);
-  width: min(460px, 86%);
+  width: min(440px, 84%);
   border-radius: 20px;
   background: rgba(8, 24, 20, 0.92);
   backdrop-filter: blur(3px);
@@ -108,21 +124,21 @@ button:disabled { cursor: not-allowed; opacity: 0.6; }
 .reveal-icon { font-size: 2.5rem; line-height: 1.1; font-weight: 900; }
 .reveal-label { font-size: 0.8rem; color: #cde7ff; }
 
-.seat-ring { position: relative; min-height: 560px; }
+.seat-ring { position: relative; min-height: 560px; padding: 14px; }
 .seat-card {
   position: absolute;
-  width: 180px;
+  width: 188px;
   border-radius: 14px;
   background: rgba(6, 17, 30, 0.78);
   border: 1px solid #355278;
-  padding: 10px;
+  padding: 12px;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
 }
 .seat-card h3 { margin: 0; font-size: 1rem; }
 .player-status { min-height: 20px; color: #bbcff0; margin: 8px 0; font-size: 0.9rem; }
 .choices { display: flex; gap: 6px; }
 .choices button { flex: 1; padding: 6px; }
-.kick-btn { width: 100%; margin-top: 8px; background: #b33c3c; border-radius: 8px; padding: 6px 8px; }
+.kick-btn { width: 100%; margin-top: 10px; background: #b33c3c; border-radius: 8px; padding: 8px 10px; font-size: 0.88rem; white-space: nowrap; }
 
 .seat-card.locked { border-color: #7ca6ea; }
 .seat-card.winner { border-color: #36da9c; background: rgba(9, 51, 35, 0.85); }

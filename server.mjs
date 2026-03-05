@@ -1,6 +1,7 @@
 import { createServer } from 'node:http';
 import { createReadStream, existsSync } from 'node:fs';
 import { extname, join, normalize } from 'node:path';
+import { randomInt } from 'node:crypto';
 
 const port = Number(process.env.PORT || 8080);
 const root = process.cwd();
@@ -418,7 +419,7 @@ function act(clientId, payload) {
     if (payload.action === 'roll') {
       if (g.data.rolls[clientId]) return { ok: true };
       const diceCount = g.data.options?.diceCount || 1;
-      const values = Array.from({ length: diceCount }, () => 1 + Math.floor(Math.random() * 6));
+      const values = Array.from({ length: diceCount }, () => randomInt(1, 7));
       const total = values.reduce((sum, v) => sum + v, 0);
       g.data.rolls[clientId] = { values, total };
       g.data.started = true;

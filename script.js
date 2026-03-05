@@ -272,6 +272,20 @@ function describeRpsRound(game) {
   return `第 ${game.data.round} 輪：😄 ${winners || '無'} ｜ 😭 ${losers || '無'}`;
 }
 
+
+function diceFace(value) {
+  return ['⚀', '⚁', '⚂', '⚃', '⚄', '⚅'][Math.max(1, Math.min(6, value)) - 1];
+}
+
+function renderBowlDice(opt, rolling, myRoll) {
+  const count = opt.diceCount || 1;
+  const values = myRoll?.values || [];
+  return Array.from({ length: count }, (_, i) => {
+    const v = rolling ? ((i + Math.floor(Date.now() / 130)) % 6) + 1 : (values[i] || 1);
+    return `<span class="bowl-die ${rolling ? 'rolling' : ''}" style="--i:${i}">${diceFace(v)}</span>`;
+  }).join('');
+}
+
 function renderBlackWhite(game) {
   const reveal = game.data.reveal;
   const winners = reveal?.winners?.map((id) => findName(game, id)).join('、') || '';
@@ -302,10 +316,15 @@ function renderDice(game) {
     ? `🎯 ${game.data.result.compare === 'low' ? '最小點數' : '最大點數'} ${game.data.result.target}，勝者：${game.data.result.winners.map((id) => findName(game, id)).join('、')}`
     : '等待擲骰';
   const configHint = `本輪設定：${opt.diceCount} 顆骰子・${opt.compare === 'high' ? '比大' : '比小'}`;
+  const myRoll = game.data.rolls[meId];
   el.gameUi.innerHTML = `
     <div class="arena dice-arena">
       <div class="dice-bowl-wrap">
-        <div class="dice-bowl ${rolling ? 'rolling' : ''}">${rolling ? '🎲 🎲 🎲' : '🥣'}</div>
+        <div class="dice-bowl ${rolling ? 'rolling' : ''}">
+          <div class="bowl-rim"></div>
+          <div class="bowl-inner">${renderBowlDice(opt, rolling, myRoll)}</div>
+          <div class="bowl-shadow"></div>
+        </div>
       </div>
       <div class="dice-config">${configHint}</div>
       <div>${lines}</div>

@@ -48,13 +48,17 @@ button:hover{filter:brightness(1.08)}
 .dice-cup{font-size:2.6rem}
 .dice-bowl{font-size:2.2rem;margin:6px 0}
 
-.dice-bowl-wrap{display:flex;justify-content:center;margin:6px 0}
-.dice-bowl{font-size:2.8rem;min-height:64px;min-width:160px;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at top,#f1e0c5,#caa271);border:3px solid #8c5a2d;border-radius:999px;box-shadow:inset 0 8px 16px rgba(255,255,255,.3),0 8px 20px rgba(0,0,0,.35)}
-.dice-bowl.rolling{animation:diceSpin .45s linear infinite}
+.dice-bowl-wrap{display:flex;justify-content:center;margin:8px 0 12px}
+.dice-bowl{position:relative;width:260px;height:130px;display:flex;align-items:flex-start;justify-content:center;filter:drop-shadow(0 10px 14px rgba(0,0,0,.35))}
+.bowl-rim{position:absolute;left:50%;top:6px;transform:translateX(-50%);width:240px;height:54px;border-radius:50%;background:radial-gradient(circle at 50% 35%,#fff3de 0%,#e2bf88 60%,#a66f35 100%);border:3px solid #7b481c}
+.bowl-inner{position:absolute;left:50%;top:24px;transform:translateX(-50%);width:220px;height:72px;border-radius:0 0 110px 110px;background:radial-gradient(circle at 50% 0,#d9b17a 0%,#aa7337 70%,#75451f 100%);border:3px solid #7b481c;border-top:none;display:flex;align-items:center;justify-content:center;gap:10px;overflow:hidden}
+.bowl-shadow{position:absolute;left:50%;bottom:8px;transform:translateX(-50%);width:200px;height:16px;border-radius:50%;background:rgba(0,0,0,.22);filter:blur(2px)}
+.bowl-die{display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:10px;background:#fff;color:#111;border:2px solid #d9dde8;box-shadow:0 2px 6px rgba(0,0,0,.3);font-size:1.45rem;transform:translateY(calc((var(--i) - 1) * 2px)) rotate(calc((var(--i) - 1) * 6deg))}
+.dice-bowl.rolling .bowl-die{animation:dieRoll .52s ease-in-out infinite;animation-delay:calc(var(--i) * .08s)}
 .dice-config{font-weight:700;color:#ffe9c8;margin-bottom:6px}
 .dice-host-config{margin-top:10px}
 .dice-host-row{display:flex;gap:8px;justify-content:center;align-items:center;margin-top:6px}
-@keyframes diceSpin{0%{transform:rotate(-8deg) scale(.96)}50%{transform:rotate(8deg) scale(1.03)}100%{transform:rotate(-8deg) scale(.96)}}
+@keyframes dieRoll{0%{transform:translateY(14px) rotate(-16deg) scale(.92)}50%{transform:translateY(-8px) rotate(18deg) scale(1.08)}100%{transform:translateY(14px) rotate(-16deg) scale(.92)}}
 
 
 .board15,.board8,.boardDark{display:grid;gap:2px;margin-top:8px;justify-content:start}

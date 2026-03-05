@@ -3,6 +3,7 @@ let appState = null;
 let darkSelected = null;
 let darkFlipMark = null;
 let diceRollingUntil = 0;
+let diceConfigDraft = null;
 
 const el = {
   nick: document.getElementById('nickname'),
@@ -306,6 +307,8 @@ function renderBlackWhite(game) {
 function renderDice(game) {
   const opt = game.data.options || { diceCount: 1, compare: 'high' };
   const isHost = game.hostClientId === meId;
+  if (!diceConfigDraft || !isHost) diceConfigDraft = { ...opt };
+  const cfg = isHost ? diceConfigDraft : opt;
   const rolling = Date.now() < diceRollingUntil;
   const lines = game.participants.map((p) => {
     const rolled = game.data.rolls[p.clientId];
@@ -368,7 +371,7 @@ function renderDice(game) {
       const opn = document.createElement('option');
       opn.value = String(n);
       opn.textContent = `${n} 顆`;
-      if (opt.diceCount === n) opn.selected = true;
+      if (cfg.diceCount === n) opn.selected = true;
       count.appendChild(opn);
     });
     const compare = document.createElement('select');
@@ -376,12 +379,17 @@ function renderDice(game) {
       const opn = document.createElement('option');
       opn.value = v;
       opn.textContent = t;
-      if (opt.compare === v) opn.selected = true;
+      if (cfg.compare === v) opn.selected = true;
       compare.appendChild(opn);
     });
+    count.onchange = () => { diceConfigDraft = { ...cfg, diceCount: Number(count.value) }; };
+    compare.onchange = () => { diceConfigDraft = { ...cfg, compare: compare.value }; };
     const save = document.createElement('button');
     save.textContent = '套用規則';
-    save.onclick = () => doAct({ action: 'set-config', diceCount: Number(count.value), compare: compare.value });
+    save.onclick = async () => {
+      await doAct({ action: 'set-config', diceCount: Number(count.value), compare: compare.value });
+      diceConfigDraft = null;
+    };
     row.appendChild(count);
     row.appendChild(compare);
     row.appendChild(save);

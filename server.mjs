@@ -417,12 +417,14 @@ function act(clientId, payload) {
   if (g.type === 'dice') {
     if (payload.action === 'set-config') {
       if (g.hostClientId !== clientId) return { ok: false, error: '僅主持人可設定擲骰規則。' };
-      if (g.data.started) return { ok: false, error: '本輪已開始，請下一輪再調整。' };
       const diceCount = Number(payload.diceCount);
       const compare = payload.compare;
       if (![1, 2, 3].includes(diceCount)) return { ok: false, error: '骰子顆數僅限 1~3。' };
       if (!['high', 'low'].includes(compare)) return { ok: false, error: '比法僅限比大或比小。' };
       g.data.options = { diceCount, compare };
+      g.data.rolls = {};
+      g.data.result = null;
+      g.data.started = false;
       return { ok: true };
     }
     if (payload.action === 'roll') {

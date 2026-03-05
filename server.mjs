@@ -1,0 +1,359 @@
+import { createServer } from 'node:http';
+import { createReadStream, existsSync } from 'node:fs';
+import { extname, join, normalize } from 'node:path';
+
+const port = Number(process.env.PORT || 8080);
+const root = process.cwd();
+
+const contentTypes = {
+  '.html': 'text/html; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.js': 'application/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.svg': 'image/svg+xml',
+};
+
+const beats = { rock: 'scissors', scissors: 'paper', paper: 'rock' };
+
+const game = {
+  players: [],
+  nextPlayerId: 1,
+  roundActive: true,
+  countdownStartAt: null,
+  result: null,
+  hostClientId: null,
+  roundMode: 'all',
+  chatMessages: [],
+  nextChatId: 1,
+};
+
+function sendJson(res, statusCode, payload) {
+  res.statusCode = statusCode;
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.end(JSON.stringify(payload));
+}
+
+function readJson(req) {
+  return new Promise((resolve, reject) => {
+    let body = '';
+    req.on('data', (chunk) => {
+      body += chunk;
+      if (body.length > 1_000_000) reject(new Error('payload_too_large'));
+    });
+    req.on('end', () => {
+      if (!body) return resolve({});
+      try {
+        resolve(JSON.parse(body));
+      } catch {
+        reject(new Error('invalid_json'));
+      }
+    });
+    req.on('error', reject);
+  });
+}
+
+function toLabel(choice) {
+  if (choice === 'rock') return '✊ 石頭';
+  if (choice === 'paper') return '✋ 布';
+  return '✌️ 剪刀';
+}
+
+function calculateRound(choices) {
+  const uniqueChoices = [...new Set(choices)];
+  if (uniqueChoices.length === 1) return { type: 'draw', reason: '所有人都出一樣，這輪平手。' };
+  if (uniqueChoices.length === 3) return { type: 'draw', reason: '三種手勢都出現，這輪平手。' };
+
+  const [a, b] = uniqueChoices;
+  return { type: 'win', winningChoice: beats[a] === b ? a : b };
+}
+
+function buildResult() {
+  const result = calculateRound(game.players.map((p) => p.choice));
+  if (result.type === 'draw') {
+    return {
+      type: 'draw',
+      reason: result.reason,
+      roundResultText: result.reason,
+      winners: [],
+      losers: [],
+      winningChoice: null,
+    };
+  }
+
+  const winners = game.players.filter((p) => p.choice === result.winningChoice).map((p) => p.id);
+  const losers = game.players.filter((p) => p.choice !== result.winningChoice).map((p) => p.id);
+
+  return {
+    type: 'win',
+    reason: '',
+    roundResultText: `😄 贏家：${game.players
+      .filter((p) => winners.includes(p.id))
+      .map((p) => p.nickname)
+      .join('、')}｜😢 輸家：${game.players
+      .filter((p) => losers.includes(p.id))
+      .map((p) => p.nickname)
+      .join('、')}（勝利手勢 ${toLabel(result.winningChoice)}）`,
+    winners,
+    losers,
+    winningChoice: result.winningChoice,
+  };
+}
+
+function syncGame() {
+  if (!game.roundActive) return;
+  if (game.players.length < 2) {
+    game.countdownStartAt = null;
+    return;
+  }
+
+  const allChosen = game.players.every((p) => p.choice);
+  if (!allChosen) {
+    game.countdownStartAt = null;
+    return;
+  }
+
+  if (!game.countdownStartAt) {
+    game.countdownStartAt = Date.now();
+    return;
+  }
+
+  const elapsed = Date.now() - game.countdownStartAt;
+  if (elapsed >= 3000) {
+    game.roundActive = false;
+    game.result = buildResult();
+  }
+}
+
+function getPublicState() {
+  syncGame();
+
+  let countdown = null;
+  if (game.roundActive && game.countdownStartAt) {
+    const elapsedSeconds = Math.floor((Date.now() - game.countdownStartAt) / 1000);
+    countdown = Math.max(1, 3 - elapsedSeconds);
+  }
+
+  return {
+    players: game.players,
+    roundActive: game.roundActive,
+    countdown,
+    result: game.result,
+    hostClientId: game.hostClientId,
+    roundMode: game.roundMode,
+    chatMessages: game.chatMessages,
+  };
+}
+
+function getPlayerByClientId(clientId) {
+  return game.players.find((p) => p.clientId === clientId);
+}
+
+function addSystemMessage(text) {
+  game.chatMessages.push({ id: game.nextChatId++, sender: 'system', text, createdAt: Date.now() });
+  if (game.chatMessages.length > 100) game.chatMessages.shift();
+}
+
+function handleJoin({ clientId, nickname }) {
+  const cleanNickname = String(nickname || '').trim().slice(0, 20);
+  if (!clientId || !cleanNickname) return { ok: false, error: '缺少 clientId 或暱稱。' };
+
+  const duplicate = game.players.find((p) => p.nickname === cleanNickname && p.clientId !== clientId);
+  if (duplicate) return { ok: false, error: '暱稱重複，請使用其他名稱。' };
+
+  const mine = getPlayerByClientId(clientId);
+  if (mine) {
+    mine.nickname = cleanNickname;
+    return { ok: true };
+  }
+
+  game.players.push({ id: game.nextPlayerId++, clientId, nickname: cleanNickname, choice: null });
+  addSystemMessage(`${cleanNickname} 加入了牌桌`);
+  return { ok: true };
+}
+
+function handleChoose({ clientId, choice }) {
+  syncGame();
+  if (!game.roundActive || game.countdownStartAt) return { ok: false, error: '目前無法出拳。' };
+  if (!['rock', 'paper', 'scissors'].includes(choice)) return { ok: false, error: '無效的出拳。' };
+
+  const mine = getPlayerByClientId(clientId);
+  if (!mine) return { ok: false, error: '請先加入牌桌。' };
+
+  mine.choice = choice;
+  syncGame();
+  return { ok: true };
+}
+
+function handleNextRound() {
+  if (game.result && game.result.type === 'final') {
+    game.players = game.players.map((p) => ({ ...p, choice: null }));
+    game.roundMode = 'all';
+    game.roundActive = true;
+    game.countdownStartAt = null;
+    game.result = null;
+    addSystemMessage('已由最終結果重開新局（全員模式）');
+    return { ok: true };
+  }
+
+  let nextPlayers = game.players;
+
+  if (game.result && game.result.type === 'win' && game.roundMode !== 'all') {
+    const survivorIds = game.roundMode === 'losers' ? game.result.losers : game.result.winners;
+    nextPlayers = game.players.filter((p) => survivorIds.includes(p.id));
+  }
+
+  nextPlayers = nextPlayers.map((p) => ({ ...p, choice: null }));
+  game.players = nextPlayers;
+
+  if (game.players.length < 2) {
+    game.roundActive = false;
+    if (game.players.length === 1 && game.roundMode !== 'all') {
+      const finalPlayer = game.players[0];
+      const isLoserMode = game.roundMode === 'losers';
+      game.result = {
+        type: 'final',
+        reason: '',
+        roundResultText: isLoserMode
+          ? `🏁 最終輸家：${finalPlayer.nickname} 😢`
+          : `🏆 最終贏家：${finalPlayer.nickname} 😄`,
+        winners: isLoserMode ? [] : [finalPlayer.id],
+        losers: isLoserMode ? [finalPlayer.id] : [],
+        winningChoice: null,
+      };
+    } else {
+      game.result = null;
+    }
+    game.countdownStartAt = null;
+    return { ok: true };
+  }
+
+  game.roundActive = true;
+  game.countdownStartAt = null;
+  game.result = null;
+  return { ok: true };
+}
+
+function handleSetRoundMode({ clientId, roundMode }) {
+  if (clientId !== game.hostClientId) return { ok: false, error: '只有主持人可以設定回合模式。' };
+  if (!['all', 'losers', 'winners'].includes(roundMode)) {
+    return { ok: false, error: '無效的回合模式。' };
+  }
+
+  game.roundMode = roundMode;
+  addSystemMessage(`主持人將回合模式設為：${roundMode}`);
+  return { ok: true };
+}
+
+function handleClaimHost({ clientId }) {
+  if (!clientId) return { ok: false, error: '缺少 clientId。' };
+  if (!getPlayerByClientId(clientId)) return { ok: false, error: '請先加入牌桌。' };
+  if (game.hostClientId && game.hostClientId !== clientId) {
+    return { ok: false, error: '主持權已被其他人取得。' };
+  }
+  game.hostClientId = clientId;
+  return { ok: true };
+}
+
+function handleReleaseHost({ clientId }) {
+  if (!clientId) return { ok: false, error: '缺少 clientId。' };
+  if (game.hostClientId !== clientId) {
+    return { ok: false, error: '只有目前主持人可以放棄主持權。' };
+  }
+  game.hostClientId = null;
+  addSystemMessage('主持人已放棄主持權，現在可重新搶主持權');
+  return { ok: true };
+}
+
+function handleKick({ clientId, targetClientId }) {
+  if (clientId !== game.hostClientId) return { ok: false, error: '只有主持人可以踢人。' };
+  if (!targetClientId || targetClientId === clientId) return { ok: false, error: '無法踢除此玩家。' };
+
+  const target = getPlayerByClientId(targetClientId);
+  if (!target) return { ok: false, error: '找不到玩家。' };
+
+  game.players = game.players.filter((p) => p.clientId !== targetClientId);
+  addSystemMessage(`${target.nickname} 被主持人移出牌桌`);
+
+  if (game.players.length < 2) {
+    game.roundActive = true;
+    game.countdownStartAt = null;
+    game.result = null;
+    game.players = game.players.map((p) => ({ ...p, choice: null }));
+  }
+
+  return { ok: true };
+}
+
+function handleSendChat({ clientId, text }) {
+  const sender = getPlayerByClientId(clientId);
+  const cleanText = String(text || '').trim().slice(0, 120);
+  if (!sender) return { ok: false, error: '請先加入牌桌。' };
+  if (!cleanText) return { ok: false, error: '訊息不可空白。' };
+
+  game.chatMessages.push({
+    id: game.nextChatId++,
+    sender: sender.nickname,
+    clientId,
+    text: cleanText,
+    createdAt: Date.now(),
+  });
+  if (game.chatMessages.length > 100) game.chatMessages.shift();
+  return { ok: true };
+}
+
+createServer(async (req, res) => {
+  const urlPath = (req.url || '/').split('?')[0];
+
+  if (req.method === 'GET' && urlPath === '/api/state') {
+    sendJson(res, 200, getPublicState());
+    return;
+  }
+
+  const postApis = [
+    '/api/join',
+    '/api/choose',
+    '/api/next-round',
+    '/api/claim-host',
+    '/api/release-host',
+    '/api/set-round-mode',
+    '/api/kick',
+    '/api/chat',
+  ];
+
+  if (req.method === 'POST' && postApis.includes(urlPath)) {
+    try {
+      const payload = await readJson(req);
+      let result;
+      if (urlPath === '/api/join') result = handleJoin(payload);
+      if (urlPath === '/api/choose') result = handleChoose(payload);
+      if (urlPath === '/api/next-round') result = handleNextRound(payload);
+      if (urlPath === '/api/claim-host') result = handleClaimHost(payload);
+      if (urlPath === '/api/release-host') result = handleReleaseHost(payload);
+      if (urlPath === '/api/set-round-mode') result = handleSetRoundMode(payload);
+      if (urlPath === '/api/kick') result = handleKick(payload);
+      if (urlPath === '/api/chat') result = handleSendChat(payload);
+
+      if (!result.ok) return sendJson(res, 400, result);
+      return sendJson(res, 200, { ok: true, state: getPublicState() });
+    } catch {
+      return sendJson(res, 400, { ok: false, error: '請求格式錯誤。' });
+    }
+  }
+
+  const safePath = normalize(urlPath).replace(/^\.\.(\/|\\|$)/, '');
+  const filePath = join(root, safePath === '/' ? 'index.html' : safePath);
+
+  if (!existsSync(filePath)) {
+    res.statusCode = 404;
+    res.end('Not found');
+    return;
+  }
+
+  const type = contentTypes[extname(filePath)] || 'application/octet-stream';
+  res.setHeader('Content-Type', type);
+  createReadStream(filePath).pipe(res);
+}).listen(port, '0.0.0.0', () => {
+  console.log(`Server listening on ${port}`);
+});

@@ -310,14 +310,14 @@ function act(clientId, payload) {
       const all = active.every((p) => g.data.choices[p]);
       if (all && active.length >= 2) {
         settleRpsRound(g);
-        g.data.phase = g.data.phase === 'finished' ? 'finished' : 'countdown';
+        g.data.phase = 'countdown';
         g.data.countdownStartAt = Date.now();
       }
       return { ok: true };
     }
     if (payload.action === 'next') {
+      if (g.hostClientId !== clientId) return { ok: false, error: '僅主持人可控制下一輪。' };
       if (g.data.phase === 'finished') {
-        if (g.hostClientId !== clientId) return { ok: false, error: '僅主持人可開新局。' };
         g.data = initRps();
         ensureRpsStats(g);
         return { ok: true };

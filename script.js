@@ -206,7 +206,6 @@ function renderRps(game) {
         <div class="rps-table">${result}</div>
       </div>
       <div class="note">你目前出拳：${myPick || '尚未出拳'}</div>
-      <div class="rps-actions" id="rps-host-actions"></div>
     </div>`;
 
   const seatRing = el.gameUi.querySelector('#rps-seat-ring');
@@ -220,6 +219,7 @@ function renderRps(game) {
     const y = 50 + Math.sin(angle) * 34;
     card.style.left = `${x}%`;
     card.style.top = `${y}%`;
+    card.dataset.clientId = p.clientId;
     card.innerHTML = `
       <div class="rps-seat-name">${p.nickname}${p.clientId === meId ? '（你）' : ''}</div>
       <div class="rps-seat-status">${rpsSeatStatus(game, p.clientId, ready)}</div>
@@ -240,11 +240,16 @@ function renderRps(game) {
     seatRing.appendChild(card);
   });
 
-  const actions = el.gameUi.querySelector('#rps-host-actions');
-  const next = document.createElement('button');
-  next.textContent = game.data.phase === 'finished' ? '主持人開新局' : '下一輪';
-  next.onclick = () => doAct({ action: 'next' });
-  actions.appendChild(next);
+  if (game.hostClientId === meId && (game.data.phase === 'revealed' || game.data.phase === 'finished')) {
+    const hostSeat = [...seatRing.querySelectorAll('.rps-seat')].find((n) => n.dataset.clientId === meId);
+    if (hostSeat) {
+      const next = document.createElement('button');
+      next.textContent = game.data.phase === 'finished' ? '主持人開新局' : '下一輪';
+      next.className = 'host-next-btn';
+      next.onclick = () => doAct({ action: 'next' });
+      hostSeat.appendChild(next);
+    }
+  }
   if (allPicked && game.data.phase === 'countdown') setTimeout(render, 250);
 }
 

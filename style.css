@@ -25,10 +25,17 @@ button:hover{filter:brightness(1.08)}
 .sys{color:#a6bddd;font-size:.88rem}
 
 .arena{background:linear-gradient(135deg,#154b4a,#0e2f36);border:1px solid #3a6f72;border-radius:14px;padding:12px;margin-bottom:10px}
-.rps-arena{position:relative;min-height:220px}
-.rps-table{font-size:1.2rem;font-weight:700;text-align:center;padding:12px;margin:8px auto;background:rgba(0,0,0,.25);border-radius:10px;max-width:560px}
+.rps-arena{position:relative;min-height:520px;overflow:hidden}
+.table-theme{background:radial-gradient(circle at center,#1c7d5c 0%,#0a3d30 62%);border-color:#6a4a2d}
+.rps-seat-ring{position:absolute;inset:0}
+.rps-seat{position:absolute;transform:translate(-50%,-50%);width:170px;background:rgba(8,20,36,.82);border:1px solid #4b6f9e;border-radius:12px;padding:8px 10px;text-align:left;box-shadow:0 4px 12px rgba(0,0,0,.25)}
+.rps-seat.ready{border-color:#37cd90;background:rgba(8,55,41,.85)}
+.rps-seat-name{font-weight:700}
+.rps-seat-status{font-size:.86rem;color:#cde4ff;margin-top:4px}
+.rps-table-center{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(460px,86%);background:rgba(7,23,24,.78);border:1px solid rgba(207,236,226,.28);border-radius:14px;padding:12px;backdrop-filter:blur(2px)}
+.rps-table{font-size:1.2rem;font-weight:700;text-align:center;padding:12px;margin:0 auto;background:rgba(0,0,0,.25);border-radius:10px;max-width:560px}
 .rps-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
-.note{text-align:center;color:#d2efea;margin-top:8px}
+.note{text-align:center;color:#d2efea;margin-top:380px}
 
 .bw-coins{display:flex;justify-content:center;gap:18px;font-size:3rem}
 .bw-result{text-align:center;margin:8px 0;font-size:1.1rem}
@@ -49,4 +56,5 @@ button:hover{filter:brightness(1.08)}
 @media (max-width:980px){
   .layout{grid-template-columns:1fr}
   .chat{height:320px}
+  .rps-seat{width:145px}
 }

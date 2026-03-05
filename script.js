@@ -186,11 +186,32 @@ function renderRps(game) {
   const myPick = game.data.choices[meId];
   const result = game.data.result?.text || '等待所有玩家出拳';
   el.gameUi.innerHTML = `
-    <div class="arena rps-arena">
-      <div class="rps-table">${result}</div>
+    <div class="arena rps-arena table-theme">
+      <div class="rps-seat-ring" id="rps-seat-ring"></div>
+      <div class="rps-table-center">
+        <div class="rps-table">${result}</div>
+      </div>
       <div class="rps-actions"></div>
       <div class="note">你目前出拳：${myPick || '尚未出拳'}</div>
     </div>`;
+
+  const seatRing = el.gameUi.querySelector('#rps-seat-ring');
+  const total = game.participants.length || 1;
+  game.participants.forEach((p, index) => {
+    const ready = Boolean(game.data.choices[p.clientId]);
+    const card = document.createElement('div');
+    card.className = `rps-seat ${ready ? 'ready' : ''}`;
+    const angle = (-90 + (360 / total) * index) * (Math.PI / 180);
+    const x = 50 + Math.cos(angle) * 40;
+    const y = 50 + Math.sin(angle) * 34;
+    card.style.left = `${x}%`;
+    card.style.top = `${y}%`;
+    card.innerHTML = `
+      <div class="rps-seat-name">${p.nickname}${p.clientId === meId ? '（你）' : ''}</div>
+      <div class="rps-seat-status">${ready ? '✅ 已就緒' : '⌛ 未出拳'}</div>
+    `;
+    seatRing.appendChild(card);
+  });
 
   const actions = el.gameUi.querySelector('.rps-actions');
   const opts = [['rock', '✊ 石頭'], ['paper', '✋ 布'], ['scissors', '✌️ 剪刀']];

@@ -8,66 +8,43 @@
   </head>
   <body>
     <main class="app">
-      <header class="topbar">
-        <h1>孤兒產生器</h1>
-        <p>加入玩家後，同步出拳、倒數開獎，下一輪繼續對決。</p>
-      </header>
-
-      <section class="controls">
-        <form id="add-player-form" class="add-player-form">
-          <input id="nickname-input" type="text" maxlength="20" placeholder="輸入暱稱" autocomplete="off" required />
-          <button type="submit">加入牌桌</button>
-          <button type="button" id="claim-host-btn" class="host-btn">搶主持權</button>
-        </form>
-        <div class="host-controls">
-          <label for="round-mode-select">回合模式</label>
-          <select id="round-mode-select">
-            <option value="all">全員下一輪</option>
-            <option value="losers">只保留輸家續戰</option>
-            <option value="winners">只保留贏家續戰</option>
-          </select>
-        </div>
-        <p id="setup-message" class="message"></p>
+      <h1>孤兒產生器</h1>
+      <section class="top">
+        <input id="nickname" placeholder="設定暱稱" maxlength="20" />
+        <button id="save-profile">儲存暱稱</button>
+        <button id="leave-game">退出目前遊戲</button>
+        <span id="status"></span>
       </section>
 
-      <section class="game-layout">
-        <section class="table-wrap">
-          <div class="table-surface">
-            <h2>對決牌桌</h2>
-            <div id="countdown" class="countdown">等待至少 2 位玩家出拳</div>
-            <div id="round-result" class="round-result"></div>
-            <div id="final-banner" class="final-banner" hidden></div>
-            <div id="reveal-board" class="reveal-board"></div>
-            <button id="next-round-btn" class="next-btn" disabled>下一輪</button>
-          </div>
-          <div id="player-list" class="seat-ring"></div>
-          <div id="center-countdown" class="center-countdown" hidden>3</div>
-        </section>
+      <section id="lobby" class="panel">
+        <h2>選擇遊戲</h2>
+        <div id="game-list" class="games"></div>
+      </section>
 
-        <aside class="chat-panel">
-          <h3>即時聊天室</h3>
-          <div id="chat-list" class="chat-list"></div>
-          <form id="chat-form" class="chat-form">
-            <input id="chat-input" type="text" maxlength="120" placeholder="輸入訊息..." autocomplete="off" />
-            <button type="submit">送出</button>
-          </form>
-        </aside>
+      <section id="game-room" class="panel" hidden>
+        <div class="room-head">
+          <h2 id="game-title"></h2>
+          <div>
+            <button id="claim-host">搶主持權</button>
+            <button id="release-host">放棄主持權</button>
+          </div>
+        </div>
+        <div class="layout">
+          <div>
+            <div id="participants"></div>
+            <div id="game-ui"></div>
+          </div>
+          <div class="chat">
+            <h3>聊天室</h3>
+            <div id="chat-list"></div>
+            <form id="chat-form">
+              <input id="chat-input" maxlength="120" placeholder="輸入訊息" />
+              <button>送出</button>
+            </form>
+          </div>
+        </div>
       </section>
     </main>
-
-    <template id="player-card-template">
-      <article class="seat-card">
-        <h3 class="player-name"></h3>
-        <p class="player-status">尚未出拳</p>
-        <div class="choices">
-          <button data-choice="rock">✊</button>
-          <button data-choice="paper">✋</button>
-          <button data-choice="scissors">✌️</button>
-        </div>
-        <button type="button" class="kick-btn" hidden>踢出玩家</button>
-      </article>
-    </template>
-
     <script src="script.js"></script>
   </body>
 </html>

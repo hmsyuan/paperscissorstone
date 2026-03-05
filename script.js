@@ -1,336 +1,239 @@
-const form = document.getElementById('add-player-form');
-const nicknameInput = document.getElementById('nickname-input');
-const setupMessage = document.getElementById('setup-message');
-const playerList = document.getElementById('player-list');
-const countdownEl = document.getElementById('countdown');
-const roundResultEl = document.getElementById('round-result');
-const nextRoundBtn = document.getElementById('next-round-btn');
-const playerTemplate = document.getElementById('player-card-template');
-const centerCountdownEl = document.getElementById('center-countdown');
-const revealBoardEl = document.getElementById('reveal-board');
-const finalBannerEl = document.getElementById('final-banner');
-const claimHostBtn = document.getElementById('claim-host-btn');
-const chatListEl = document.getElementById('chat-list');
-const chatForm = document.getElementById('chat-form');
-const chatInput = document.getElementById('chat-input');
-const roundModeSelect = document.getElementById('round-mode-select');
+const meId = getOrCreateClientId();
+let appState = null;
 
-const clientId = getOrCreateClientId();
-let state = {
-  players: [],
-  roundActive: true,
-  countdown: null,
-  result: null,
-  hostClientId: null,
-  roundMode: 'all',
-  chatMessages: [],
+const el = {
+  nick: document.getElementById('nickname'),
+  save: document.getElementById('save-profile'),
+  leave: document.getElementById('leave-game'),
+  status: document.getElementById('status'),
+  lobby: document.getElementById('lobby'),
+  gameList: document.getElementById('game-list'),
+  room: document.getElementById('game-room'),
+  gameTitle: document.getElementById('game-title'),
+  participants: document.getElementById('participants'),
+  gameUi: document.getElementById('game-ui'),
+  claimHost: document.getElementById('claim-host'),
+  releaseHost: document.getElementById('release-host'),
+  chatList: document.getElementById('chat-list'),
+  chatForm: document.getElementById('chat-form'),
+  chatInput: document.getElementById('chat-input'),
 };
 
-form.addEventListener('submit', async (event) => {
-  event.preventDefault();
-  const nickname = nicknameInput.value.trim();
-  if (!nickname) return;
+const gameNames = {
+  rps: '剪刀石頭布',
+  blackwhite: '黑白猜',
+  dice: '擲骰子比大小',
+  gomoku: '五子棋',
+  othello: '黑白棋',
+  darkchess: '暗棋',
+};
 
-  const response = await postJson('/api/join', { clientId, nickname });
-  if (!response.ok) return showError(response.error);
-
-  setupMessage.textContent = `${nickname} 已加入牌桌。`;
-  nicknameInput.value = '';
-  state = response.state;
+el.save.onclick = async () => {
+  const r = await api('/api/set-profile', { clientId: meId, nickname: el.nick.value.trim() });
+  if (!r.ok) return setStatus(r.error);
+  setStatus('暱稱已更新');
+  appState = r.state;
   render();
-});
+};
 
-claimHostBtn.addEventListener('click', async () => {
-  const endpoint = state.hostClientId === clientId ? '/api/release-host' : '/api/claim-host';
-  const response = await postJson(endpoint, { clientId });
-  if (!response.ok) return showError(response.error);
-
-  state = response.state;
-  setupMessage.textContent =
-    endpoint === '/api/claim-host' ? '你已取得主持權。' : '你已放棄主持權。';
+el.leave.onclick = async () => {
+  const r = await api('/api/leave-game', { clientId: meId });
+  if (!r.ok) return setStatus(r.error);
+  appState = r.state;
   render();
-});
+};
 
-roundModeSelect.addEventListener('change', async () => {
-  const response = await postJson('/api/set-round-mode', {
-    clientId,
-    roundMode: roundModeSelect.value,
-  });
-  if (!response.ok) return showError(response.error);
+el.claimHost.onclick = async () => hostToggle(true);
+el.releaseHost.onclick = async () => hostToggle(false);
 
-  state = response.state;
-  setupMessage.textContent = '已更新回合模式。';
+async function hostToggle(claim) {
+  const endpoint = claim ? '/api/claim-host' : '/api/release-host';
+  const r = await api(endpoint, { clientId: meId });
+  if (!r.ok) return setStatus(r.error);
+  appState = { ...r.state, stateGames: r.state.games };
+  setStatus(claim ? '已取得主持權' : '已放棄主持權');
   render();
-});
+}
 
-nextRoundBtn.addEventListener('click', async () => {
-  const response = await postJson('/api/next-round', { clientId });
-  if (!response.ok) return showError(response.error);
-
-  state = response.state;
-  render();
-});
-
-chatForm.addEventListener('submit', async (event) => {
-  event.preventDefault();
-  const text = chatInput.value.trim();
+el.chatForm.onsubmit = async (e) => {
+  e.preventDefault();
+  const text = el.chatInput.value.trim();
   if (!text) return;
-
-  const response = await postJson('/api/chat', { clientId, text });
-  if (!response.ok) return showError(response.error);
-
-  chatInput.value = '';
-  state = response.state;
+  const r = await api('/api/chat', { clientId: meId, text });
+  if (!r.ok) return setStatus(r.error);
+  el.chatInput.value = '';
+  appState = { ...r.state, stateGames: r.state.games };
   render();
-});
+};
 
-async function choose(choice) {
-  const response = await postJson('/api/choose', { clientId, choice });
-  if (!response.ok) return showError(response.error);
+function setStatus(msg) { el.status.textContent = msg; }
 
-  state = response.state;
-  render();
+function getOrCreateClientId() {
+  const key = 'orphan-client-id';
+  const v = localStorage.getItem(key);
+  if (v) return v;
+  const id = crypto.randomUUID();
+  localStorage.setItem(key, id);
+  return id;
 }
 
-async function kickPlayer(targetClientId) {
-  const response = await postJson('/api/kick', { clientId, targetClientId });
-  if (!response.ok) return showError(response.error);
-
-  state = response.state;
-  render();
+async function api(url, body) {
+  const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  return res.json();
 }
 
-function getMyPlayer() {
-  return state.players.find((player) => player.clientId === clientId) || null;
-}
-
-function choiceText(choice) {
-  if (choice === 'rock') return '石頭';
-  if (choice === 'paper') return '布';
-  return '剪刀';
-}
-
-function toIcon(choice) {
-  if (choice === 'rock') return '✊';
-  if (choice === 'paper') return '✋';
-  return '✌️';
-}
-
-function placeSeat(node, index, total) {
-  if (total === 1) {
-    node.style.left = '50%';
-    node.style.top = '14%';
-    node.style.transform = 'translate(-50%, 0)';
-    return;
+async function fetchState() {
+  const res = await fetch(`/api/state?clientId=${encodeURIComponent(meId)}`);
+  const json = await res.json();
+  if (json.ok) {
+    appState = { ...json.state, stateGames: json.state.games };
+    render();
   }
-
-  const angle = (-90 + (360 / total) * index) * (Math.PI / 180);
-  const radiusX = 44;
-  const radiusY = 38;
-  const x = 50 + Math.cos(angle) * radiusX;
-  const y = 50 + Math.sin(angle) * radiusY;
-
-  node.style.left = `${x}%`;
-  node.style.top = `${y}%`;
-  node.style.transform = 'translate(-50%, -50%)';
-}
-
-function renderRevealBoard(myPlayer) {
-  revealBoardEl.innerHTML = '';
-  if (!state.result) return;
-
-  state.players.forEach((player) => {
-    const item = document.createElement('div');
-    item.className = 'reveal-item';
-
-    let mood = '😐';
-    if (state.result.winners.includes(player.id)) {
-      item.classList.add('winner');
-      mood = '😄';
-    }
-    if (state.result.losers.includes(player.id)) {
-      item.classList.add('loser');
-      mood = '😢';
-    }
-
-    const isMe = myPlayer && myPlayer.id === player.id;
-    item.innerHTML = `
-      <div class="reveal-name">${isMe ? `${player.nickname}（你）` : player.nickname}</div>
-      <div class="reveal-icon">${toIcon(player.choice)}</div>
-      <div class="reveal-label">${mood} ${choiceText(player.choice)}</div>
-    `;
-    revealBoardEl.appendChild(item);
-  });
-}
-
-function renderFinalBanner() {
-  if (!state.result || state.result.type !== 'final') {
-    finalBannerEl.hidden = true;
-    finalBannerEl.innerHTML = '';
-    return;
-  }
-
-  const isFinalLoser = state.result.losers.length > 0;
-  finalBannerEl.hidden = false;
-  finalBannerEl.className = `final-banner ${isFinalLoser ? 'loser' : 'winner'}`;
-  finalBannerEl.innerHTML = `
-    <div class="final-emoji">${isFinalLoser ? '😢' : '😄'}</div>
-    <div class="final-text">${state.result.roundResultText}</div>
-  `;
-}
-
-function renderChat(myPlayer) {
-  const prevScrollTop = chatListEl.scrollTop;
-  const prevDistanceFromBottom = chatListEl.scrollHeight - (chatListEl.scrollTop + chatListEl.clientHeight);
-  const shouldStickToBottom = prevDistanceFromBottom < 16;
-
-  chatListEl.innerHTML = '';
-  state.chatMessages.forEach((msg) => {
-    const row = document.createElement('div');
-    row.className = 'chat-item';
-
-    const mine = msg.clientId && myPlayer && msg.clientId === myPlayer.clientId;
-    if (mine) row.classList.add('mine');
-    if (msg.sender === 'system') row.classList.add('system');
-
-    const sender = msg.sender === 'system' ? '系統' : msg.sender;
-    row.innerHTML = `<span class="chat-sender">${sender}</span><span class="chat-text">${msg.text}</span>`;
-    chatListEl.appendChild(row);
-  });
-
-  if (shouldStickToBottom) {
-    chatListEl.scrollTop = chatListEl.scrollHeight;
-  } else {
-    chatListEl.scrollTop = prevScrollTop;
-  }
-}
-
-function showError(message) {
-  setupMessage.textContent = message || '發生錯誤';
-}
-
-function modeText(mode) {
-  if (mode === 'losers') return '只保留輸家續戰';
-  if (mode === 'winners') return '只保留贏家續戰';
-  return '全員下一輪';
 }
 
 function render() {
-  const myPlayer = getMyPlayer();
-  const isHost = state.hostClientId === clientId;
+  if (!appState) return;
+  const me = appState.me || {};
+  el.nick.value = me.nickname || '';
 
-  playerList.innerHTML = '';
-  nextRoundBtn.disabled = state.roundActive;
+  el.gameList.innerHTML = '';
+  for (const [key, name] of Object.entries(gameNames)) {
+    const g = appState.stateGames[key];
+    const btn = document.createElement('button');
+    btn.className = 'game-btn';
+    btn.textContent = `${name} (${g.participants.length}人)`;
+    btn.onclick = async () => {
+      const r = await api('/api/join-game', { clientId: meId, gameType: key });
+      if (!r.ok) return setStatus(r.error);
+      appState = { ...r.state, stateGames: r.state.games };
+      render();
+    };
+    el.gameList.appendChild(btn);
+  }
 
-  claimHostBtn.disabled = !myPlayer || (Boolean(state.hostClientId) && !isHost);
-  if (isHost) claimHostBtn.textContent = '放棄主持權';
-  else if (state.hostClientId) claimHostBtn.textContent = '主持權已有人';
-  else claimHostBtn.textContent = '搶主持權';
+  const current = me.currentGame;
+  el.room.hidden = !current;
+  if (!current) return;
 
-  roundModeSelect.value = state.roundMode || 'all';
-  roundModeSelect.disabled = !isHost;
+  const game = appState.stateGames[current];
+  el.gameTitle.textContent = gameNames[current];
 
-  if (state.countdown) {
-    countdownEl.textContent = '全員就緒，準備開獎...';
-    centerCountdownEl.hidden = false;
-    centerCountdownEl.textContent = String(state.countdown);
-  } else {
-    centerCountdownEl.hidden = true;
-    if (state.result?.type === 'final') {
-      countdownEl.textContent = '已產生最終結果，按「下一輪」可重開新局';
-    } else if (state.players.length < 2) {
-      countdownEl.textContent = '等待至少 2 位玩家出拳';
-    } else if (state.roundActive) {
-      countdownEl.textContent = '等待玩家出拳';
-    } else {
-      countdownEl.textContent = '開獎完成！';
+  el.participants.innerHTML = '<h3>參與者</h3>';
+  game.participants.forEach((p) => {
+    const row = document.createElement('div');
+    row.className = 'p-row';
+    row.textContent = `${p.nickname}${p.clientId === game.hostClientId ? ' 👑' : ''}${p.clientId === meId ? '（你）' : ''}`;
+    if (game.hostClientId === meId && p.clientId !== meId) {
+      const kick = document.createElement('button');
+      kick.textContent = '踢出';
+      kick.onclick = async () => {
+        const r = await api('/api/kick', { clientId: meId, targetClientId: p.clientId, gameType: current });
+        if (!r.ok) return setStatus(r.error);
+        appState = { ...r.state, stateGames: r.state.games };
+        render();
+      };
+      row.appendChild(kick);
     }
-  }
-
-  if (state.result) {
-    roundResultEl.textContent = state.result.roundResultText;
-  } else if (state.players.length === 0) {
-    roundResultEl.textContent = '目前沒有玩家，請先加入。';
-  } else {
-    roundResultEl.textContent = `目前模式：${modeText(state.roundMode)} ${isHost ? '（你可切換）' : ''}`;
-  }
-
-  renderFinalBanner();
-  renderRevealBoard(myPlayer);
-  renderChat(myPlayer);
-
-  state.players.forEach((player, index) => {
-    const node = playerTemplate.content.firstElementChild.cloneNode(true);
-    const nameEl = node.querySelector('.player-name');
-    const statusEl = node.querySelector('.player-status');
-    const buttons = node.querySelectorAll('.choices button');
-    const kickBtn = node.querySelector('.kick-btn');
-
-    const isMe = myPlayer && myPlayer.id === player.id;
-    const isHostPlayer = player.clientId === state.hostClientId;
-    nameEl.textContent = `${isMe ? `${player.nickname}（你）` : player.nickname}${isHostPlayer ? ' 👑' : ''}`;
-
-    if (player.choice) {
-      const mood = state.result?.winners.includes(player.id)
-        ? '😄'
-        : state.result?.losers.includes(player.id)
-          ? '😢'
-          : '😐';
-      statusEl.textContent = state.roundActive
-        ? '已就緒，等待其他玩家...'
-        : `${mood} 本輪：${choiceText(player.choice)}`;
-      node.classList.add('locked');
-    }
-
-    if (state.result?.winners.includes(player.id)) node.classList.add('winner');
-    if (state.result?.losers.includes(player.id)) node.classList.add('loser');
-
-    buttons.forEach((btn) => {
-      btn.disabled = !isMe || !state.roundActive || Boolean(state.countdown);
-      btn.addEventListener('click', () => choose(btn.dataset.choice));
-    });
-
-    const canKick = isHost && !isMe;
-    kickBtn.hidden = !canKick;
-    if (canKick) kickBtn.addEventListener('click', () => kickPlayer(player.clientId));
-
-    placeSeat(node, index, state.players.length);
-    playerList.appendChild(node);
+    el.participants.appendChild(row);
   });
+
+  renderGame(current, game, me);
+  renderChat(game);
 }
 
-function getOrCreateClientId() {
-  const key = 'rps-client-id';
-  const existing = localStorage.getItem(key);
-  if (existing) return existing;
+function renderChat(game) {
+  const prev = el.chatList.scrollTop;
+  const dist = el.chatList.scrollHeight - (el.chatList.scrollTop + el.chatList.clientHeight);
+  const stick = dist < 16;
 
-  const newId =
-    typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-      ? crypto.randomUUID()
-      : `fallback-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  el.chatList.innerHTML = '';
+  const tip = document.createElement('div');
+  tip.textContent = `閒置 ${appState.idleMinutes} 分鐘會被自動斷線。`;
+  el.chatList.appendChild(tip);
 
-  localStorage.setItem(key, newId);
-  return newId;
-}
-
-async function postJson(url, data) {
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data),
+  (game.chat || []).forEach((m) => {
+    const row = document.createElement('div');
+    row.textContent = `${m.sender}: ${m.text}`;
+    el.chatList.appendChild(row);
   });
-  return response.json();
+
+  if (stick) el.chatList.scrollTop = el.chatList.scrollHeight;
+  else el.chatList.scrollTop = prev;
 }
 
-async function refreshState() {
-  try {
-    const response = await fetch('/api/state');
-    state = await response.json();
-    render();
-  } catch {
-    showError('與伺服器連線中斷，稍後重試。');
+function renderGame(type, game, me) {
+  el.gameUi.innerHTML = '';
+  if (type === 'rps') return renderRps(game);
+  if (type === 'blackwhite') return renderBw(game);
+  if (type === 'dice') return renderDice(game);
+  if (type === 'gomoku') return renderGomoku(game);
+  if (type === 'othello') return renderOthello(game);
+  return renderDark(game);
+}
+
+function action(payload) { return api('/api/act', { clientId: meId, ...payload }); }
+
+function renderRps(game) {
+  el.gameUi.innerHTML = `<h3>出拳</h3><div>${game.data.result?.text || ''}</div>`;
+  ['rock', 'paper', 'scissors'].forEach((v) => {
+    const b = document.createElement('button'); b.textContent = v; b.onclick = async () => { const r=await action({action:'pick', value:v}); if(r.ok){appState={...r.state,stateGames:r.state.games};render();}};
+    el.gameUi.appendChild(b);
+  });
+  const n = document.createElement('button'); n.textContent='下一輪'; n.onclick=async()=>{const r=await action({action:'next'}); if(r.ok){appState={...r.state,stateGames:r.state.games};render();}}; el.gameUi.appendChild(n);
+}
+
+function renderBw(game) {
+  el.gameUi.innerHTML = `<h3>黑白猜</h3><div>${game.data.reveal ? `結果: ${game.data.reveal.out}` : ''}</div>`;
+  ['black','white'].forEach((v)=>{const b=document.createElement('button');b.textContent=v;b.onclick=async()=>{const r=await action({action:'pick',value:v}); if(r.ok){appState={...r.state,stateGames:r.state.games};render();}};el.gameUi.appendChild(b);});
+  const rev=document.createElement('button'); rev.textContent='主持人開獎'; rev.onclick=async()=>{const r=await action({action:'reveal'}); if(r.ok){appState={...r.state,stateGames:r.state.games};render();} else setStatus(r.error);}; el.gameUi.appendChild(rev);
+  const n=document.createElement('button'); n.textContent='下一輪'; n.onclick=async()=>{const r=await action({action:'next'}); if(r.ok){appState={...r.state,stateGames:r.state.games};render();}}; el.gameUi.appendChild(n);
+}
+
+function renderDice(game) {
+  const lines = Object.entries(game.data.rolls).map(([id,v])=>`${findName(game,id)}: ${v}`).join('<br/>');
+  el.gameUi.innerHTML = `<h3>擲骰子</h3><div>${lines}</div><div>${game.data.result ? `😄 ${game.data.result.winners.map((id)=>findName(game,id)).join('、')} 最大(${game.data.result.max})` : ''}</div>`;
+  const r=document.createElement('button'); r.textContent='擲骰'; r.onclick=async()=>{const x=await action({action:'roll'}); if(x.ok){appState={...x.state,stateGames:x.state.games};render();}}; el.gameUi.appendChild(r);
+  const n=document.createElement('button'); n.textContent='下一輪'; n.onclick=async()=>{const x=await action({action:'next'}); if(x.ok){appState={...x.state,stateGames:x.state.games};render();}}; el.gameUi.appendChild(n);
+}
+
+function renderGomoku(game) {
+  const w=document.createElement('div'); w.className='board15';
+  for(let y=0;y<15;y++) for(let x=0;x<15;x++) {
+    const c=document.createElement('button'); c.className='cell'; c.textContent=game.data.board[y][x]||'';
+    c.onclick=async()=>{const r=await action({action:'place',x,y}); if(r.ok){appState={...r.state,stateGames:r.state.games};render();} else setStatus(r.error);};
+    w.appendChild(c);
   }
+  el.gameUi.innerHTML=`<h3>五子棋 ${game.data.winner?`🏁 ${findName(game,game.data.winner)} 勝`:''}</h3>`;
+  el.gameUi.appendChild(w);
+  const reset=document.createElement('button'); reset.textContent='重開'; reset.onclick=async()=>{const r=await action({action:'reset'}); if(r.ok){appState={...r.state,stateGames:r.state.games};render();}}; el.gameUi.appendChild(reset);
 }
 
-setInterval(refreshState, 500);
-refreshState();
+function renderOthello(game) {
+  const b=document.createElement('div'); b.className='board8';
+  for(let y=0;y<8;y++) for(let x=0;x<8;x++) {
+    const c=document.createElement('button'); c.className='cell'; c.textContent=game.data.board[y][x]||'';
+    c.onclick=async()=>{const r=await action({action:'place',x,y}); if(r.ok){appState={...r.state,stateGames:r.state.games};render();} else setStatus(r.error);};
+    b.appendChild(c);
+  }
+  el.gameUi.innerHTML=`<h3>黑白棋 ${game.data.winner?`🏁 ${game.data.winner}`:`輪到: ${game.data.turn}`}</h3>`;
+  el.gameUi.appendChild(b);
+  const reset=document.createElement('button'); reset.textContent='重開'; reset.onclick=async()=>{const r=await action({action:'reset'}); if(r.ok){appState={...r.state,stateGames:r.state.games};render();}}; el.gameUi.appendChild(reset);
+}
+
+function pieceTxt(p){ if(!p) return ''; return p.revealed?`${p.color}${p.kind}`:'🀫'; }
+function renderDark(game){
+  const b=document.createElement('div'); b.className='boardDark';
+  for(let y=0;y<8;y++) for(let x=0;x<4;x++) {
+    const c=document.createElement('button'); c.className='cell'; c.textContent=pieceTxt(game.data.board[y][x]);
+    c.onclick=async()=>{const p=game.data.board[y][x]; if(p && !p.revealed){const r=await action({action:'flip',x,y}); if(r.ok){appState={...r.state,stateGames:r.state.games};render();} else setStatus(r.error);}};
+    b.appendChild(c);
+  }
+  el.gameUi.innerHTML=`<h3>暗棋 ${game.data.turnColor?`輪到: ${game.data.turnColor}`:''}</h3><p>移動請用 API（簡化版）</p>`;
+  el.gameUi.appendChild(b);
+  const reset=document.createElement('button'); reset.textContent='重開'; reset.onclick=async()=>{const r=await action({action:'reset'}); if(r.ok){appState={...r.state,stateGames:r.state.games};render();}}; el.gameUi.appendChild(reset);
+}
+
+function findName(game, id){ return game.participants.find((p)=>p.clientId===id)?.nickname || '玩家'; }
+
+setInterval(fetchState, 3000);
+fetchState();

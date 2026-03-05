@@ -34,10 +34,19 @@ function createGameState(type) {
 function defaultGameData(type) {
   if (type === 'rps') return initRps();
   if (type === 'blackwhite') return { choices: {}, reveal: null };
-  if (type === 'dice') return { rolls: {}, result: null, options: { diceCount: 1, compare: 'high' }, started: false };
+  if (type === 'dice') return initDiceData();
   if (type === 'gomoku') return { board: Array.from({ length: 15 }, () => Array(15).fill(null)), turn: null, winner: null };
   if (type === 'othello') return initOthello();
   return initDarkChess();
+}
+
+function initDiceData(prevOptions = null) {
+  return {
+    rolls: {},
+    result: null,
+    options: prevOptions || { diceCount: 1, compare: 'high' },
+    started: false,
+  };
 }
 
 function initRps() {
@@ -433,7 +442,7 @@ function act(clientId, payload) {
       return { ok: true };
     }
     if (payload.action === 'next') {
-      g.data = defaultGameData('dice');
+      g.data = initDiceData(g.data.options);
       return { ok: true };
     }
   }

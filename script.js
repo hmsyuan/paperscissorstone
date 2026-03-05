@@ -313,9 +313,17 @@ function renderDice(game) {
     return `${p.nickname}: ${text}`;
   }).join(' ｜ ');
   const result = game.data.result
-    ? `🎯 ${game.data.result.compare === 'low' ? '最小點數' : '最大點數'} ${game.data.result.target}，勝者：${game.data.result.winners.map((id) => findName(game, id)).join('、')}`
+    ? `🎯 ${game.data.result.compare === 'low' ? '最小點數' : '最大點數'} ${game.data.result.target}`
     : '等待擲骰';
-  const configHint = `本輪設定：${opt.diceCount} 顆骰子・${opt.compare === 'high' ? '比大' : '比小'}`;
+  const resultBoard = game.data.result
+    ? `<div class="dice-result-board">${game.participants.map((p) => {
+      const r = game.data.rolls[p.clientId];
+      const isWin = game.data.result.winners.includes(p.clientId);
+      return `<div class="dice-result-item ${isWin ? 'win' : 'lose'}"><b>${p.nickname}</b><span>${r ? r.values.join(' + ') : '-'}</span><strong>${r ? r.total : '-'}</strong><em>${isWin ? '🏆 勝' : '💤 負'}</em></div>`;
+    }).join('')}</div>`
+    : '';
+  const hostName = findName(game, game.hostClientId);
+  const configHint = `本輪設定：${opt.diceCount} 顆骰子・${opt.compare === 'high' ? '比大' : '比小'}（主持人：${hostName}）`;
   const myRoll = game.data.rolls[meId];
   el.gameUi.innerHTML = `
     <div class="arena dice-arena">
@@ -329,6 +337,7 @@ function renderDice(game) {
       <div class="dice-config">${configHint}</div>
       <div>${lines}</div>
       <div>${result}</div>
+      ${resultBoard}
       <div class="rps-actions" id="dice-actions"></div>
       <div id="dice-host-config" class="dice-host-config"></div>
     </div>`;
@@ -377,6 +386,8 @@ function renderDice(game) {
     row.appendChild(compare);
     row.appendChild(save);
     hostBox.appendChild(row);
+  } else if (!isHost) {
+    hostBox.innerHTML = '<small>僅主持人可變更本輪骰子規則。</small>';
   }
 }
 

@@ -1,0 +1,24 @@
+body{font-family:Arial,"Noto Sans TC";margin:0;background:#0f1b2d;color:#eef3ff}
+.app{max-width:1200px;margin:0 auto;padding:16px}
+.panel{background:#142742;border:1px solid #2e4569;border-radius:12px;padding:12px;margin-top:12px}
+.top{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+input,button,select{font:inherit}
+input,select{background:#0b1a31;color:#fff;border:1px solid #3b5d88;border-radius:8px;padding:8px}
+button{background:#2b6ef8;color:#fff;border:none;border-radius:8px;padding:8px 10px;cursor:pointer}
+.games{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px}
+.game-btn{text-align:left}
+.layout{display:grid;grid-template-columns:1fr 320px;gap:10px}
+.room-head{display:flex;justify-content:space-between;align-items:center}
+#participants{display:grid;gap:6px;margin-bottom:10px}
+.p-row{display:flex;justify-content:space-between;gap:6px;background:#0f213c;padding:6px;border-radius:8px}
+.chat{background:#0f213c;border-radius:10px;padding:8px;display:flex;flex-direction:column;height:620px}
+#chat-list{flex:1;overflow-y:auto;border:1px solid #2f4569;border-radius:8px;padding:8px;background:#091427}
+#chat-form{display:flex;gap:6px;margin-top:8px}
+#game-ui button{margin:4px}
+.board15{display:grid;grid-template-columns:repeat(15,26px);gap:2px}
+.board8{display:grid;grid-template-columns:repeat(8,32px);gap:2px}
+.boardDark{display:grid;grid-template-columns:repeat(4,48px);gap:2px}
+.cell{width:100%;height:28px;padding:0}
+.board8 .cell{height:32px}
+.boardDark .cell{height:42px}
+@media (max-width:960px){.layout{grid-template-columns:1fr}.chat{height:320px}}

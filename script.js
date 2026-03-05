@@ -1,6 +1,7 @@
 const meId = getOrCreateClientId();
 let appState = null;
 let darkSelected = null;
+let darkFlipMark = null;
 
 const el = {
   nick: document.getElementById('nickname'),
@@ -184,15 +185,28 @@ function renderGame(type, game) {
 
 function renderRps(game) {
   const myPick = game.data.choices[meId];
-  const result = game.data.result?.text || '等待所有玩家出拳';
+  const activeIds = game.participants
+    .map((p) => p.clientId)
+    .filter((id) => !game.data.stats?.[id]?.eliminated);
+  const allPicked = activeIds.length >= 2 && activeIds.every((id) => game.data.choices[id]);
+  const countDownLeft = game.data.phase === 'countdown'
+    ? Math.max(0, 3 - Math.floor((Date.now() - game.data.countdownStartAt) / 1000))
+    : 0;
+  const result = game.data.phase === 'finished'
+    ? `🏆 最終勝者：${findName(game, game.data.finalResult?.champion)}`
+    : game.data.phase === 'revealed'
+      ? describeRpsRound(game)
+      : game.data.phase === 'countdown'
+        ? `全部出拳完成，${countDownLeft}...`
+        : `第 ${game.data.round} 輪：等待所有存活玩家出拳`;
   el.gameUi.innerHTML = `
     <div class="arena rps-arena table-theme">
       <div class="rps-seat-ring" id="rps-seat-ring"></div>
       <div class="rps-table-center">
         <div class="rps-table">${result}</div>
       </div>
-      <div class="rps-actions"></div>
       <div class="note">你目前出拳：${myPick || '尚未出拳'}</div>
+      <div class="rps-actions" id="rps-host-actions"></div>
     </div>`;
 
   const seatRing = el.gameUi.querySelector('#rps-seat-ring');
@@ -208,23 +222,48 @@ function renderRps(game) {
     card.style.top = `${y}%`;
     card.innerHTML = `
       <div class="rps-seat-name">${p.nickname}${p.clientId === meId ? '（你）' : ''}</div>
-      <div class="rps-seat-status">${ready ? '✅ 已就緒' : '⌛ 未出拳'}</div>
+      <div class="rps-seat-status">${rpsSeatStatus(game, p.clientId, ready)}</div>
     `;
+    if (p.clientId === meId && !game.data.stats?.[p.clientId]?.eliminated && game.data.phase === 'picking') {
+      const mine = document.createElement('div');
+      mine.className = 'rps-seat-actions';
+      [['rock', '✊'], ['paper', '✋'], ['scissors', '✌️']].forEach(([value, label]) => {
+        const b = document.createElement('button');
+        b.textContent = label;
+        b.className = 'mini-pick';
+        if (myPick === value) b.classList.add('active');
+        b.onclick = () => doAct({ action: 'pick', value });
+        mine.appendChild(b);
+      });
+      card.appendChild(mine);
+    }
     seatRing.appendChild(card);
   });
 
-  const actions = el.gameUi.querySelector('.rps-actions');
-  const opts = [['rock', '✊ 石頭'], ['paper', '✋ 布'], ['scissors', '✌️ 剪刀']];
-  for (const [value, label] of opts) {
-    const b = document.createElement('button');
-    b.textContent = label;
-    b.onclick = () => doAct({ action: 'pick', value });
-    actions.appendChild(b);
-  }
+  const actions = el.gameUi.querySelector('#rps-host-actions');
   const next = document.createElement('button');
-  next.textContent = '下一輪';
+  next.textContent = game.data.phase === 'finished' ? '主持人開新局' : '下一輪';
   next.onclick = () => doAct({ action: 'next' });
   actions.appendChild(next);
+  if (allPicked && game.data.phase === 'countdown') setTimeout(render, 250);
+}
+
+function rpsSeatStatus(game, clientId, ready) {
+  const stat = game.data.stats?.[clientId];
+  if (stat?.eliminated) return '💀 已淘汰';
+  if (game.data.phase === 'revealed' || game.data.phase === 'finished') {
+    if (game.data.roundResult?.draw) return '😐 平手';
+    if (game.data.roundResult?.winners?.includes(clientId)) return '😄 本輪勝';
+    if (game.data.roundResult?.losers?.includes(clientId)) return '😭 本輪敗';
+  }
+  return ready ? '✅ 已出拳' : '⌛ 未出拳';
+}
+
+function describeRpsRound(game) {
+  if (game.data.roundResult?.draw) return `第 ${game.data.round} 輪：平手 😐`;
+  const winners = (game.data.roundResult?.winners || []).map((id) => findName(game, id)).join('、');
+  const losers = (game.data.roundResult?.losers || []).map((id) => findName(game, id)).join('、');
+  return `第 ${game.data.round} 輪：😄 ${winners || '無'} ｜ 😭 ${losers || '無'}`;
 }
 
 function renderBlackWhite(game) {
@@ -300,8 +339,9 @@ function renderOthello(game) {
 function pieceText(p) {
   if (!p) return '';
   if (!p.revealed) return '🀫';
-  const map = { k: '將', g: '士', m: '象', r: '車', n: '馬', c: '炮', p: '卒' };
-  return `${p.color}${map[p.kind] || p.kind}`;
+  const map = { k: '帥', g: '仕', m: '相', r: '俥', n: '傌', c: '炮', p: '兵' };
+  const blackMap = { k: '將', g: '士', m: '象', r: '車', n: '馬', c: '砲', p: '卒' };
+  return p.color === 'R' ? (map[p.kind] || p.kind) : (blackMap[p.kind] || p.kind);
 }
 
 function renderDarkChess(game) {
@@ -313,10 +353,16 @@ function renderDarkChess(game) {
       cell.className = 'cell dark-cell';
       const p = game.data.board[y][x];
       cell.textContent = pieceText(p);
+      if (p?.revealed) cell.classList.add(p.color === 'R' ? 'piece-red' : 'piece-black');
+      if (darkFlipMark && darkFlipMark.x === x && darkFlipMark.y === y) cell.classList.add('flip-in');
       if (darkSelected && darkSelected.x === x && darkSelected.y === y) cell.classList.add('selected');
       cell.onclick = async () => {
         const piece = game.data.board[y][x];
-        if (piece && !piece.revealed) return doAct({ action: 'flip', x, y });
+        if (piece && !piece.revealed) {
+          darkFlipMark = { x, y };
+          setTimeout(() => { darkFlipMark = null; render(); }, 520);
+          return doAct({ action: 'flip', x, y });
+        }
         if (!darkSelected) {
           darkSelected = { x, y };
           return render();
@@ -331,7 +377,9 @@ function renderDarkChess(game) {
       board.appendChild(cell);
     }
   }
-  el.gameUi.innerHTML = `<div class="arena"><div>暗棋 ${game.data.turnColor ? `輪到：${game.data.turnColor}` : '先翻子決定先手'}</div></div>`;
+  const firstText = game.data.firstPlayerClientId ? `丟銅板先手：${findName(game, game.data.firstPlayerClientId)}` : '等待丟銅板決定先手';
+  const turnText = game.data.turnClientId ? `輪到：${findName(game, game.data.turnClientId)}` : '';
+  el.gameUi.innerHTML = `<div class="arena"><div>暗棋 ${firstText}${turnText ? ` ｜ ${turnText}` : ''}</div></div>`;
   el.gameUi.firstElementChild.appendChild(board);
   const reset = document.createElement('button'); reset.textContent = '重開棋局'; reset.onclick = () => doAct({ action: 'reset' }); el.gameUi.appendChild(reset);
 }

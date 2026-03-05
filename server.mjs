@@ -31,12 +31,68 @@ function createGameState(type) {
 }
 
 function defaultGameData(type) {
-  if (type === 'rps') return { choices: {}, result: null };
+  if (type === 'rps') return initRps();
   if (type === 'blackwhite') return { choices: {}, reveal: null };
   if (type === 'dice') return { rolls: {}, result: null };
   if (type === 'gomoku') return { board: Array.from({ length: 15 }, () => Array(15).fill(null)), turn: null, winner: null };
   if (type === 'othello') return initOthello();
   return initDarkChess();
+}
+
+function initRps() {
+  return {
+    choices: {},
+    phase: 'picking',
+    countdownStartAt: null,
+    roundResult: null,
+    round: 1,
+    stats: {},
+    finalResult: null,
+  };
+}
+
+function ensureRpsStats(game) {
+  for (const id of game.participants) {
+    if (!game.data.stats[id]) game.data.stats[id] = { wins: 0, losses: 0, eliminated: false };
+  }
+}
+
+function activeRpsPlayers(game) {
+  ensureRpsStats(game);
+  return game.participants.filter((id) => !game.data.stats[id].eliminated);
+}
+
+function settleRpsRound(game) {
+  const active = activeRpsPlayers(game);
+  const uniq = [...new Set(active.map((p) => game.data.choices[p]))];
+  if (uniq.length === 1 || uniq.length === 3) {
+    game.data.roundResult = { text: '本輪平手 😐', winners: [], losers: [], draw: true };
+    return;
+  }
+  const beats = { rock: 'scissors', scissors: 'paper', paper: 'rock' };
+  const winChoice = beats[uniq[0]] === uniq[1] ? uniq[0] : uniq[1];
+  const winners = active.filter((p) => game.data.choices[p] === winChoice);
+  const losers = active.filter((p) => game.data.choices[p] !== winChoice);
+  for (const id of winners) game.data.stats[id].wins += 1;
+  for (const id of losers) {
+    game.data.stats[id].losses += 1;
+    game.data.stats[id].eliminated = true;
+  }
+  game.data.roundResult = { winners, losers, draw: false, winChoice };
+  const survivors = activeRpsPlayers(game);
+  if (survivors.length <= 1) {
+    game.data.phase = 'finished';
+    game.data.finalResult = { champion: survivors[0] || null, losers: game.participants.filter((id) => id !== survivors[0]) };
+  }
+}
+
+function processRpsTimers() {
+  for (const game of Object.values(state.games)) {
+    if (game.type !== 'rps') continue;
+    if (game.data.phase !== 'countdown' || !game.data.countdownStartAt) continue;
+    if (Date.now() - game.data.countdownStartAt < 3000) continue;
+    game.data.phase = game.data.finalResult ? 'finished' : 'revealed';
+  }
 }
 
 function initOthello() {
@@ -62,9 +118,30 @@ function initDarkChess() {
   const board = Array.from({ length: 8 }, () => Array(4).fill(null));
   let idx = 0;
   for (let y = 0; y < 8; y++) for (let x = 0; x < 4; x++) board[y][x] = pieces[idx++];
-  return { board, turnColor: null, winner: null };
+  return { board, turnColor: null, winner: null, turnClientId: null, firstPlayerClientId: null };
 }
 
+
+function ensureDarkCoinFlip(game) {
+  if (game.type !== 'darkchess') return;
+  if (game.participants.length < 2) {
+    game.data.turnClientId = null;
+    game.data.firstPlayerClientId = null;
+    game.data.turnColor = null;
+    return;
+  }
+  if (game.data.turnClientId && game.participants.includes(game.data.turnClientId)) return;
+  const pick = game.participants[Math.floor(Math.random() * 2)];
+  game.data.firstPlayerClientId = pick;
+  game.data.turnClientId = pick;
+  game.data.turnColor = game.participants[0] === pick ? 'R' : 'B';
+}
+
+function switchDarkTurn(game, currentId) {
+  const next = game.participants.find((id) => id !== currentId) || currentId;
+  game.data.turnClientId = next;
+  game.data.turnColor = game.participants[0] === next ? 'R' : 'B';
+}
 function sendJson(res, code, payload) {
   res.statusCode = code;
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -107,12 +184,15 @@ function pruneIdle() {
 
 function cleanupGameData(game, clientId) {
   if (game.type === 'rps') delete game.data.choices[clientId];
+  if (game.type === 'rps' && game.data.stats) delete game.data.stats[clientId];
   if (game.type === 'blackwhite') delete game.data.choices[clientId];
   if (game.type === 'dice') delete game.data.rolls[clientId];
 }
 
 function publicState(clientId) {
   pruneIdle();
+  processRpsTimers();
+  for (const g of Object.values(state.games)) if (g.type === 'darkchess') ensureDarkCoinFlip(g);
   if (clientId && sessions.has(clientId)) upsertSession(clientId);
   const me = clientId ? sessions.get(clientId) : null;
   const games = Object.fromEntries(gameKeys.map((k) => {
@@ -142,6 +222,8 @@ function joinGame(clientId, gameType) {
   s.lastSeen = Date.now();
 
   if (game.type === 'gomoku' && !game.data.turn && game.participants.length >= 2) game.data.turn = game.participants[0];
+  if (game.type === 'rps') ensureRpsStats(game);
+  if (game.type === 'darkchess') ensureDarkCoinFlip(game);
   return { ok: true };
 }
 
@@ -152,6 +234,7 @@ function leaveGame(clientId) {
   g.participants = g.participants.filter((p) => p !== clientId);
   if (g.hostClientId === clientId) g.hostClientId = g.participants[0] || null;
   cleanupGameData(g, clientId);
+  if (g.type === 'darkchess') ensureDarkCoinFlip(g);
   s.currentGame = null;
   return { ok: true };
 }
@@ -195,6 +278,7 @@ function kick(hostId, targetId, gameType) {
   const s = sessions.get(targetId);
   if (s && s.currentGame === gameType) s.currentGame = null;
   cleanupGameData(g, targetId);
+  if (g.type === 'darkchess') ensureDarkCoinFlip(g);
   return { ok: true };
 }
 
@@ -206,24 +290,32 @@ function act(clientId, payload) {
 
   if (g.type === 'rps') {
     if (payload.action === 'pick') {
+      if (g.data.phase !== 'picking') return { ok: false, error: '請等待本輪結算。' };
       if (!['rock', 'paper', 'scissors'].includes(payload.value)) return { ok: false, error: '無效出拳。' };
+      const active = activeRpsPlayers(g);
+      if (!active.includes(clientId)) return { ok: false, error: '你已淘汰，本輪不可出拳。' };
       g.data.choices[clientId] = payload.value;
-      const all = g.participants.every((p) => g.data.choices[p]);
-      if (all && g.participants.length >= 2) {
-        const uniq = [...new Set(g.participants.map((p) => g.data.choices[p]))];
-        if (uniq.length === 1 || uniq.length === 3) g.data.result = { text: '平手 😐', winners: [], losers: [] };
-        else {
-          const beats = { rock: 'scissors', scissors: 'paper', paper: 'rock' };
-          const w = beats[uniq[0]] === uniq[1] ? uniq[0] : uniq[1];
-          const winners = g.participants.filter((p) => g.data.choices[p] === w);
-          const losers = g.participants.filter((p) => g.data.choices[p] !== w);
-          g.data.result = { text: `😄 ${winners.map((p) => sessions.get(p)?.nickname).join('、')} 勝`, winners, losers };
-        }
+      const all = active.every((p) => g.data.choices[p]);
+      if (all && active.length >= 2) {
+        settleRpsRound(g);
+        g.data.phase = g.data.phase === 'finished' ? 'finished' : 'countdown';
+        g.data.countdownStartAt = Date.now();
       }
       return { ok: true };
     }
     if (payload.action === 'next') {
-      g.data = defaultGameData('rps');
+      if (g.data.phase === 'finished') {
+        if (g.hostClientId !== clientId) return { ok: false, error: '僅主持人可開新局。' };
+        g.data = initRps();
+        ensureRpsStats(g);
+        return { ok: true };
+      }
+      if (g.data.phase !== 'revealed') return { ok: false, error: '請等待本輪揭曉。' };
+      g.data.round += 1;
+      g.data.phase = 'picking';
+      g.data.choices = {};
+      g.data.roundResult = null;
+      g.data.countdownStartAt = null;
       return { ok: true };
     }
   }
@@ -336,14 +428,20 @@ function hasAny(b,c){ for(let y=0;y<8;y++)for(let x=0;x<8;x++) if(validOthello(b
 function score(b){ let B=0,W=0; for(const r of b)for(const v of r){ if(v==='B')B++; if(v==='W')W++; } return B===W?'draw':(B>W?'B':'W'); }
 
 function darkAct(g, clientId, payload) {
-  if (payload.action === 'reset') { g.data = initDarkChess(); return { ok: true }; }
+  if (payload.action === 'reset') {
+    g.data = initDarkChess();
+    ensureDarkCoinFlip(g);
+    return { ok: true };
+  }
   if (g.participants.length < 2) return { ok: false, error: '需至少兩人。' };
+  ensureDarkCoinFlip(g);
+  if (g.data.turnClientId !== clientId) return { ok: false, error: '尚未輪到你。' };
+
   if (payload.action === 'flip') {
     const { x, y } = payload; const p = g.data.board[y]?.[x];
     if (!p || p.revealed) return { ok: false, error: '不可翻。' };
     p.revealed = true;
-    if (!g.data.turnColor) g.data.turnColor = p.color;
-    else g.data.turnColor = g.data.turnColor === 'R' ? 'B' : 'R';
+    switchDarkTurn(g, clientId);
     return { ok: true };
   }
   if (payload.action === 'move') {
@@ -352,12 +450,12 @@ function darkAct(g, clientId, payload) {
     const b = g.data.board[to.y]?.[to.x];
     if (!a || !a.revealed) return { ok: false, error: '起點無效。' };
     const myColor = g.participants[0] === clientId ? 'R' : 'B';
-    if (a.color !== myColor || g.data.turnColor !== myColor) return { ok: false, error: '尚未輪到你。' };
+    if (a.color !== myColor) return { ok: false, error: '不可操作對手棋子。' };
     if (Math.abs(from.x - to.x) + Math.abs(from.y - to.y) !== 1) return { ok: false, error: '只能走一步。' };
     if (b && (!b.revealed || b.color === a.color)) return { ok: false, error: '不可吃子。' };
     g.data.board[to.y][to.x] = a;
     g.data.board[from.y][from.x] = null;
-    g.data.turnColor = myColor === 'R' ? 'B' : 'R';
+    switchDarkTurn(g, clientId);
     return { ok: true };
   }
   return { ok: false, error: '無效動作。' };

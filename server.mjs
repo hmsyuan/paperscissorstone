@@ -33,7 +33,7 @@ function createGameState(type) {
 function defaultGameData(type) {
   if (type === 'rps') return initRps();
   if (type === 'blackwhite') return { choices: {}, reveal: null };
-  if (type === 'dice') return { rolls: {}, result: null };
+  if (type === 'dice') return { rolls: {}, result: null, options: { diceCount: 1, compare: 'high' }, started: false };
   if (type === 'gomoku') return { board: Array.from({ length: 15 }, () => Array(15).fill(null)), turn: null, winner: null };
   if (type === 'othello') return initOthello();
   return initDarkChess();
@@ -405,14 +405,29 @@ function act(clientId, payload) {
   }
 
   if (g.type === 'dice') {
+    if (payload.action === 'set-config') {
+      if (g.hostClientId !== clientId) return { ok: false, error: '僅主持人可設定擲骰規則。' };
+      if (g.data.started) return { ok: false, error: '本輪已開始，請下一輪再調整。' };
+      const diceCount = Number(payload.diceCount);
+      const compare = payload.compare;
+      if (![1, 2, 3].includes(diceCount)) return { ok: false, error: '骰子顆數僅限 1~3。' };
+      if (!['high', 'low'].includes(compare)) return { ok: false, error: '比法僅限比大或比小。' };
+      g.data.options = { diceCount, compare };
+      return { ok: true };
+    }
     if (payload.action === 'roll') {
       if (g.data.rolls[clientId]) return { ok: true };
-      g.data.rolls[clientId] = 1 + Math.floor(Math.random() * 6);
+      const diceCount = g.data.options?.diceCount || 1;
+      const values = Array.from({ length: diceCount }, () => 1 + Math.floor(Math.random() * 6));
+      const total = values.reduce((sum, v) => sum + v, 0);
+      g.data.rolls[clientId] = { values, total };
+      g.data.started = true;
       const all = g.participants.every((p) => g.data.rolls[p]);
       if (all && g.participants.length >= 2) {
-        const max = Math.max(...Object.values(g.data.rolls));
-        const winners = g.participants.filter((p) => g.data.rolls[p] === max);
-        g.data.result = { max, winners };
+        const totals = g.participants.map((p) => g.data.rolls[p].total);
+        const target = (g.data.options?.compare || 'high') === 'low' ? Math.min(...totals) : Math.max(...totals);
+        const winners = g.participants.filter((p) => g.data.rolls[p].total === target);
+        g.data.result = { compare: g.data.options?.compare || 'high', target, winners };
       }
       return { ok: true };
     }

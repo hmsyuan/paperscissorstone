@@ -2,6 +2,7 @@ const meId = getOrCreateClientId();
 let appState = null;
 let darkSelected = null;
 let darkFlipMark = null;
+let diceRollingUntil = 0;
 
 const el = {
   nick: document.getElementById('nickname'),
@@ -289,19 +290,75 @@ function renderBlackWhite(game) {
 }
 
 function renderDice(game) {
-  const lines = game.participants.map((p) => `${p.nickname}: ${game.data.rolls[p.clientId] || '-'}`).join(' ｜ ');
-  const result = game.data.result ? `🎯 最高點 ${game.data.result.max}，勝者：${game.data.result.winners.map((id) => findName(game, id)).join('、')}` : '等待擲骰';
+  const opt = game.data.options || { diceCount: 1, compare: 'high' };
+  const isHost = game.hostClientId === meId;
+  const rolling = Date.now() < diceRollingUntil;
+  const lines = game.participants.map((p) => {
+    const rolled = game.data.rolls[p.clientId];
+    const text = rolling ? '🎲 轉動中...' : (rolled ? `${rolled.values.join(', ')}（合計 ${rolled.total}）` : '-');
+    return `${p.nickname}: ${text}`;
+  }).join(' ｜ ');
+  const result = game.data.result
+    ? `🎯 ${game.data.result.compare === 'low' ? '最小點數' : '最大點數'} ${game.data.result.target}，勝者：${game.data.result.winners.map((id) => findName(game, id)).join('、')}`
+    : '等待擲骰';
+  const configHint = `本輪設定：${opt.diceCount} 顆骰子・${opt.compare === 'high' ? '比大' : '比小'}`;
   el.gameUi.innerHTML = `
     <div class="arena dice-arena">
-      <div class="dice-cup">🥤</div>
-      <div class="dice-bowl">🎲 🎲</div>
+      <div class="dice-bowl-wrap">
+        <div class="dice-bowl ${rolling ? 'rolling' : ''}">${rolling ? '🎲 🎲 🎲' : '🥣'}</div>
+      </div>
+      <div class="dice-config">${configHint}</div>
       <div>${lines}</div>
       <div>${result}</div>
-      <div class="rps-actions"></div>
+      <div class="rps-actions" id="dice-actions"></div>
+      <div id="dice-host-config" class="dice-host-config"></div>
     </div>`;
-  const actions = el.gameUi.querySelector('.rps-actions');
-  const roll = document.createElement('button'); roll.textContent = '擲骰'; roll.onclick = () => doAct({ action: 'roll' }); actions.appendChild(roll);
-  const next = document.createElement('button'); next.textContent = '下一輪'; next.onclick = () => doAct({ action: 'next' }); actions.appendChild(next);
+
+  const actions = el.gameUi.querySelector('#dice-actions');
+  const roll = document.createElement('button');
+  roll.textContent = '擲骰';
+  roll.onclick = async () => {
+    diceRollingUntil = Date.now() + 1300;
+    render();
+    await doAct({ action: 'roll' });
+  };
+  actions.appendChild(roll);
+  const next = document.createElement('button');
+  next.textContent = '下一輪';
+  next.onclick = () => doAct({ action: 'next' });
+  actions.appendChild(next);
+
+  if (rolling) setTimeout(render, 200);
+
+  const hostBox = el.gameUi.querySelector('#dice-host-config');
+  if (isHost && !game.data.started) {
+    hostBox.innerHTML = '<b>主持人設定（開擲前）</b>';
+    const row = document.createElement('div');
+    row.className = 'dice-host-row';
+    const count = document.createElement('select');
+    [1, 2, 3].forEach((n) => {
+      const opn = document.createElement('option');
+      opn.value = String(n);
+      opn.textContent = `${n} 顆`;
+      if (opt.diceCount === n) opn.selected = true;
+      count.appendChild(opn);
+    });
+    const compare = document.createElement('select');
+    [['high', '比大'], ['low', '比小']].forEach(([v, t]) => {
+      const opn = document.createElement('option');
+      opn.value = v;
+      opn.textContent = t;
+      if (opt.compare === v) opn.selected = true;
+      compare.appendChild(opn);
+    });
+    const save = document.createElement('button');
+    save.textContent = '套用規則';
+    save.onclick = () => doAct({ action: 'set-config', diceCount: Number(count.value), compare: compare.value });
+    row.appendChild(count);
+    row.appendChild(compare);
+    row.appendChild(save);
+    hostBox.appendChild(row);
+  }
 }
 
 function renderGomoku(game) {

@@ -187,6 +187,16 @@ function handleChoose({ clientId, choice }) {
 }
 
 function handleNextRound() {
+  if (game.result && game.result.type === 'final') {
+    game.players = game.players.map((p) => ({ ...p, choice: null }));
+    game.roundMode = 'all';
+    game.roundActive = true;
+    game.countdownStartAt = null;
+    game.result = null;
+    addSystemMessage('已由最終結果重開新局（全員模式）');
+    return { ok: true };
+  }
+
   let nextPlayers = game.players;
 
   if (game.result && game.result.type === 'win' && game.roundMode !== 'all') {

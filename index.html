@@ -3,13 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>多人剪刀石頭布</title>
+    <title>孤兒產生器</title>
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
     <main class="app">
       <header class="topbar">
-        <h1>多人剪刀石頭布</h1>
+        <h1>孤兒產生器</h1>
         <p>加入玩家後，同步出拳、倒數開獎，下一輪繼續對決。</p>
       </header>
 
@@ -36,6 +36,7 @@
             <h2>對決牌桌</h2>
             <div id="countdown" class="countdown">等待至少 2 位玩家出拳</div>
             <div id="round-result" class="round-result"></div>
+            <div id="final-banner" class="final-banner" hidden></div>
             <div id="reveal-board" class="reveal-board"></div>
             <button id="next-round-btn" class="next-btn" disabled>下一輪</button>
           </div>

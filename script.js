@@ -8,6 +8,7 @@ const nextRoundBtn = document.getElementById('next-round-btn');
 const playerTemplate = document.getElementById('player-card-template');
 const centerCountdownEl = document.getElementById('center-countdown');
 const revealBoardEl = document.getElementById('reveal-board');
+const finalBannerEl = document.getElementById('final-banner');
 const claimHostBtn = document.getElementById('claim-host-btn');
 const chatListEl = document.getElementById('chat-list');
 const chatForm = document.getElementById('chat-form');
@@ -103,10 +104,10 @@ function getMyPlayer() {
   return state.players.find((player) => player.clientId === clientId) || null;
 }
 
-function toLabel(choice) {
-  if (choice === 'rock') return '✊ 石頭';
-  if (choice === 'paper') return '✋ 布';
-  return '✌️ 剪刀';
+function choiceText(choice) {
+  if (choice === 'rock') return '石頭';
+  if (choice === 'paper') return '布';
+  return '剪刀';
 }
 
 function toIcon(choice) {
@@ -156,13 +157,33 @@ function renderRevealBoard(myPlayer) {
     item.innerHTML = `
       <div class="reveal-name">${isMe ? `${player.nickname}（你）` : player.nickname}</div>
       <div class="reveal-icon">${toIcon(player.choice)}</div>
-      <div class="reveal-label">${mood} ${toLabel(player.choice)}</div>
+      <div class="reveal-label">${mood} ${choiceText(player.choice)}</div>
     `;
     revealBoardEl.appendChild(item);
   });
 }
 
+function renderFinalBanner() {
+  if (!state.result || state.result.type !== 'final') {
+    finalBannerEl.hidden = true;
+    finalBannerEl.innerHTML = '';
+    return;
+  }
+
+  const isFinalLoser = state.result.losers.length > 0;
+  finalBannerEl.hidden = false;
+  finalBannerEl.className = `final-banner ${isFinalLoser ? 'loser' : 'winner'}`;
+  finalBannerEl.innerHTML = `
+    <div class="final-emoji">${isFinalLoser ? '😢' : '😄'}</div>
+    <div class="final-text">${state.result.roundResultText}</div>
+  `;
+}
+
 function renderChat(myPlayer) {
+  const prevScrollTop = chatListEl.scrollTop;
+  const prevDistanceFromBottom = chatListEl.scrollHeight - (chatListEl.scrollTop + chatListEl.clientHeight);
+  const shouldStickToBottom = prevDistanceFromBottom < 16;
+
   chatListEl.innerHTML = '';
   state.chatMessages.forEach((msg) => {
     const row = document.createElement('div');
@@ -176,7 +197,12 @@ function renderChat(myPlayer) {
     row.innerHTML = `<span class="chat-sender">${sender}</span><span class="chat-text">${msg.text}</span>`;
     chatListEl.appendChild(row);
   });
-  chatListEl.scrollTop = chatListEl.scrollHeight;
+
+  if (shouldStickToBottom) {
+    chatListEl.scrollTop = chatListEl.scrollHeight;
+  } else {
+    chatListEl.scrollTop = prevScrollTop;
+  }
 }
 
 function showError(message) {
@@ -210,9 +236,15 @@ function render() {
     centerCountdownEl.textContent = String(state.countdown);
   } else {
     centerCountdownEl.hidden = true;
-    if (state.players.length < 2) countdownEl.textContent = '等待至少 2 位玩家出拳';
-    else if (state.roundActive) countdownEl.textContent = '等待玩家出拳';
-    else countdownEl.textContent = '開獎完成！';
+    if (state.result?.type === 'final') {
+      countdownEl.textContent = '已產生最終結果，按「下一輪」可重開新局';
+    } else if (state.players.length < 2) {
+      countdownEl.textContent = '等待至少 2 位玩家出拳';
+    } else if (state.roundActive) {
+      countdownEl.textContent = '等待玩家出拳';
+    } else {
+      countdownEl.textContent = '開獎完成！';
+    }
   }
 
   if (state.result) {
@@ -223,6 +255,7 @@ function render() {
     roundResultEl.textContent = `目前模式：${modeText(state.roundMode)} ${isHost ? '（你可切換）' : ''}`;
   }
 
+  renderFinalBanner();
   renderRevealBoard(myPlayer);
   renderChat(myPlayer);
 
@@ -245,7 +278,7 @@ function render() {
           : '😐';
       statusEl.textContent = state.roundActive
         ? '已就緒，等待其他玩家...'
-        : `${mood} 本輪：${toLabel(player.choice)}`;
+        : `${mood} 本輪：${choiceText(player.choice)}`;
       node.classList.add('locked');
     }
 

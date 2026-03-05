@@ -105,6 +105,35 @@ button:disabled { cursor: not-allowed; opacity: 0.6; }
 .round-result { margin: 10px 0; color: #ddf8ea; min-height: 24px; }
 .next-btn { background: #423f80; }
 
+.final-banner {
+  margin: 8px 0;
+  border-radius: 14px;
+  padding: 10px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(10, 27, 22, 0.88);
+}
+
+.final-banner.winner {
+  background: rgba(9, 51, 35, 0.9);
+  border-color: #36da9c;
+}
+
+.final-banner.loser {
+  background: rgba(65, 20, 25, 0.9);
+  border-color: #ff7f7f;
+}
+
+.final-emoji {
+  font-size: clamp(3.6rem, 8vw, 5.4rem);
+  line-height: 1;
+}
+
+.final-text {
+  margin-top: 4px;
+  font-weight: 700;
+}
+
+
 .reveal-board {
   margin: 10px 0 12px;
   display: grid;

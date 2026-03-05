@@ -387,12 +387,36 @@ function renderDarkChess(game) {
   const colorMap = game.participants
     .map((p, idx) => `${p.nickname}：${idx === 0 ? '🔴 紅方' : '⚫ 黑方'}`)
     .join(' ｜ ');
-  el.gameUi.innerHTML = `<div class="arena"><div>暗棋 ${firstText}${turnText ? ` ｜ ${turnText}` : ''}</div><div class="dark-roles">${colorMap}</div><div id="dark-captures" class="dark-captures"></div></div>`;
+  el.gameUi.innerHTML = `<div class="arena"><div>暗棋 ${firstText}${turnText ? ` ｜ ${turnText}` : ''}</div><div class="dark-roles">${colorMap}</div><div id="dark-variants" class="dark-variants"></div><div id="dark-captures" class="dark-captures"></div></div>`;
   el.gameUi.firstElementChild.appendChild(board);
+  renderDarkVariants(game);
   renderDarkCaptures(game);
   const reset = document.createElement('button'); reset.textContent = '重開棋局'; reset.onclick = () => doAct({ action: 'reset' }); el.gameUi.appendChild(reset);
 }
 
+
+
+function renderDarkVariants(game) {
+  const box = el.gameUi.querySelector('#dark-variants');
+  if (!box) return;
+  const states = game.data.variantState || [];
+  const canSet = game.participants.some((p) => p.clientId === meId) && !game.data.started;
+  box.innerHTML = '<div class="dark-variant-title">特殊玩法（開局前雙方勾選）</div>';
+  states.forEach((v) => {
+    const row = document.createElement('label');
+    row.className = 'dark-variant-row';
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.checked = Boolean(v.myChecked);
+    input.disabled = !canSet;
+    input.onchange = () => doAct({ action: 'set-variant', key: v.key, value: input.checked });
+    const text = document.createElement('span');
+    text.textContent = `${v.label} ${v.enabled ? '✅ 啟用' : '⛔ 未啟用'}`;
+    row.appendChild(input);
+    row.appendChild(text);
+    box.appendChild(row);
+  });
+}
 
 function renderDarkCaptures(game) {
   const box = el.gameUi.querySelector('#dark-captures');

@@ -69,6 +69,11 @@ button:hover{filter:brightness(1.08)}
 .rps-countdown{display:inline-block;font-size:5rem;font-weight:900;line-height:1;color:#fff14f;text-shadow:0 0 10px rgba(255,241,79,.9),0 0 26px rgba(255,82,82,.8);animation:rpsFlash .7s steps(2,start) infinite}
 @keyframes rpsFlash{0%{transform:scale(.86);opacity:.65}100%{transform:scale(1.08);opacity:1}}
 .dark-roles{margin:8px 0;color:#ffecc5;font-weight:700}
+
+.dark-variants{display:grid;gap:6px;margin:8px 0}
+.dark-variant-title{font-weight:700;color:#ffecc5}
+.dark-variant-row{display:flex;gap:8px;align-items:center;background:rgba(10,20,30,.35);padding:6px 8px;border-radius:8px}
+
 .dark-captures{display:grid;gap:6px;margin-bottom:8px}
 .dark-cap-item{background:rgba(10,20,30,.45);border:1px solid rgba(255,255,255,.2);padding:6px 8px;border-radius:8px}
 

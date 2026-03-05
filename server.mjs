@@ -118,7 +118,7 @@ function initDarkChess() {
   const board = Array.from({ length: 8 }, () => Array(4).fill(null));
   let idx = 0;
   for (let y = 0; y < 8; y++) for (let x = 0; x < 4; x++) board[y][x] = pieces[idx++];
-  return { board, turnColor: null, winner: null, turnClientId: null, firstPlayerClientId: null, captures: {} };
+  return { board, turnColor: null, winner: null, turnClientId: null, firstPlayerClientId: null, captures: {}, started: false, variantVotes: {} };
 }
 
 
@@ -141,6 +141,59 @@ function switchDarkTurn(game, currentId) {
   const next = game.participants.find((id) => id !== currentId) || currentId;
   game.data.turnClientId = next;
   game.data.turnColor = game.participants[0] === next ? 'R' : 'B';
+}
+
+
+const darkVariantDefs = [
+  { key: 'generalCanCaptureSoldier', label: '帥可吃兵（特殊玩法）', defaultEnabled: false },
+  { key: 'cannonSlideMove', label: '炮可直線平移多格（特殊玩法）', defaultEnabled: false },
+];
+
+function resolveDarkVariants(game) {
+  const out = {};
+  for (const def of darkVariantDefs) {
+    const votes = game.data.variantVotes?.[def.key] || {};
+    const enabledByAll = game.participants.length >= 2 && game.participants.every((id) => votes[id]);
+    out[def.key] = def.defaultEnabled || enabledByAll;
+  }
+  out.cannonLongCapture = true;
+  return out;
+}
+
+function darkVariantState(game, viewerId) {
+  return darkVariantDefs.map((def) => {
+    const votes = game.data.variantVotes?.[def.key] || {};
+    const checkedByAll = game.participants.length >= 2 && game.participants.every((id) => votes[id]);
+    return {
+      key: def.key,
+      label: def.label,
+      myChecked: Boolean(votes[viewerId]),
+      enabled: def.defaultEnabled || checkedByAll,
+    };
+  });
+}
+
+function darkPieceCanCapture(attacker, defender, variants) {
+  if (attacker.kind === 'c') return true;
+  const rank = { k: 7, g: 6, m: 5, r: 4, n: 3, c: 2, p: 1 };
+  if (attacker.kind === 'k' && defender.kind === 'p' && !variants.generalCanCaptureSoldier) return false;
+  if (attacker.kind === 'p' && defender.kind === 'k') return true;
+  return rank[attacker.kind] >= rank[defender.kind];
+}
+
+function darkPathIntervening(board, from, to) {
+  if (from.x !== to.x && from.y !== to.y) return null;
+  const points = [];
+  if (from.x === to.x) {
+    const minY = Math.min(from.y, to.y);
+    const maxY = Math.max(from.y, to.y);
+    for (let y = minY + 1; y < maxY; y++) points.push(board[y]?.[from.x]);
+  } else {
+    const minX = Math.min(from.x, to.x);
+    const maxX = Math.max(from.x, to.x);
+    for (let x = minX + 1; x < maxX; x++) points.push(board[from.y]?.[x]);
+  }
+  return points;
 }
 function sendJson(res, code, payload) {
   res.statusCode = code;
@@ -197,7 +250,7 @@ function publicDarkData(game, viewerId) {
     if (id === viewerId) return { playerId: id, count: list.length, pieces: list };
     return { playerId: id, count: list.length, pieces: null };
   });
-  return { ...game.data, captureView };
+  return { ...game.data, captureView, variantState: darkVariantState(game, viewerId), resolvedVariants: resolveDarkVariants(game) };
 }
 
 function publicState(clientId) {
@@ -447,15 +500,28 @@ function darkAct(g, clientId, payload) {
   }
   if (g.participants.length < 2) return { ok: false, error: '需至少兩人。' };
   ensureDarkCoinFlip(g);
+
+  if (payload.action === 'set-variant') {
+    if (g.data.started) return { ok: false, error: '開局後不可變更特殊玩法。' };
+    const def = darkVariantDefs.find((v) => v.key === payload.key);
+    if (!def) return { ok: false, error: '未知特殊玩法。' };
+    if (!g.data.variantVotes[payload.key]) g.data.variantVotes[payload.key] = {};
+    g.data.variantVotes[payload.key][clientId] = Boolean(payload.value);
+    return { ok: true };
+  }
+
   if (g.data.turnClientId !== clientId) return { ok: false, error: '尚未輪到你。' };
+  const variants = resolveDarkVariants(g);
 
   if (payload.action === 'flip') {
     const { x, y } = payload; const p = g.data.board[y]?.[x];
     if (!p || p.revealed) return { ok: false, error: '不可翻。' };
     p.revealed = true;
+    g.data.started = true;
     switchDarkTurn(g, clientId);
     return { ok: true };
   }
+
   if (payload.action === 'move') {
     const { from, to } = payload;
     const a = g.data.board[from.y]?.[from.x];
@@ -463,14 +529,38 @@ function darkAct(g, clientId, payload) {
     if (!a || !a.revealed) return { ok: false, error: '起點無效。' };
     const myColor = g.participants[0] === clientId ? 'R' : 'B';
     if (a.color !== myColor) return { ok: false, error: '不可操作對手棋子。' };
-    if (Math.abs(from.x - to.x) + Math.abs(from.y - to.y) !== 1) return { ok: false, error: '只能走一步。' };
-    if (b && (!b.revealed || b.color === a.color)) return { ok: false, error: '不可吃子。' };
+
+    if (a.kind === 'c') {
+      if (!b) {
+        if (variants.cannonSlideMove) {
+          const line = darkPathIntervening(g.data.board, from, to);
+          if (!line) return { ok: false, error: '炮只能直線移動。' };
+          if (line.some(Boolean)) return { ok: false, error: '炮移動路徑不可有棋子。' };
+        } else if (Math.abs(from.x - to.x) + Math.abs(from.y - to.y) !== 1) {
+          return { ok: false, error: '炮未開啟特殊玩法時只能走一步。' };
+        }
+      } else {
+        if (!b.revealed || b.color === a.color) return { ok: false, error: '不可吃子。' };
+        const line = darkPathIntervening(g.data.board, from, to);
+        if (!line) return { ok: false, error: '炮只能直線吃子。' };
+        const blockers = line.filter(Boolean).length;
+        if (blockers !== 1) return { ok: false, error: '炮吃子必須隔一子。' };
+      }
+    } else {
+      if (Math.abs(from.x - to.x) + Math.abs(from.y - to.y) !== 1) return { ok: false, error: '只能走一步。' };
+      if (b) {
+        if (!b.revealed || b.color === a.color) return { ok: false, error: '不可吃子。' };
+        if (!darkPieceCanCapture(a, b, variants)) return { ok: false, error: '此棋子無法吃掉目標。' };
+      }
+    }
+
     if (b) {
       if (!g.data.captures[clientId]) g.data.captures[clientId] = [];
       g.data.captures[clientId].push({ color: b.color, kind: b.kind });
     }
     g.data.board[to.y][to.x] = a;
     g.data.board[from.y][from.x] = null;
+    g.data.started = true;
     switchDarkTurn(g, clientId);
     return { ok: true };
   }

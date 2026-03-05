@@ -118,7 +118,7 @@ function initDarkChess() {
   const board = Array.from({ length: 8 }, () => Array(4).fill(null));
   let idx = 0;
   for (let y = 0; y < 8; y++) for (let x = 0; x < 4; x++) board[y][x] = pieces[idx++];
-  return { board, turnColor: null, winner: null, turnClientId: null, firstPlayerClientId: null };
+  return { board, turnColor: null, winner: null, turnClientId: null, firstPlayerClientId: null, captures: {} };
 }
 
 
@@ -189,6 +189,17 @@ function cleanupGameData(game, clientId) {
   if (game.type === 'dice') delete game.data.rolls[clientId];
 }
 
+
+function publicDarkData(game, viewerId) {
+  const captures = game.data.captures || {};
+  const captureView = game.participants.map((id) => {
+    const list = captures[id] || [];
+    if (id === viewerId) return { playerId: id, count: list.length, pieces: list };
+    return { playerId: id, count: list.length, pieces: null };
+  });
+  return { ...game.data, captureView };
+}
+
 function publicState(clientId) {
   pruneIdle();
   processRpsTimers();
@@ -198,7 +209,8 @@ function publicState(clientId) {
   const games = Object.fromEntries(gameKeys.map((k) => {
     const g = state.games[k];
     const participants = g.participants.map((id) => ({ clientId: id, nickname: sessions.get(id)?.nickname || '玩家' }));
-    return [k, { ...g, participants }];
+    const data = g.type === 'darkchess' ? publicDarkData(g, clientId) : g.data;
+    return [k, { ...g, data, participants }];
   }));
   return {
     me,
@@ -453,6 +465,10 @@ function darkAct(g, clientId, payload) {
     if (a.color !== myColor) return { ok: false, error: '不可操作對手棋子。' };
     if (Math.abs(from.x - to.x) + Math.abs(from.y - to.y) !== 1) return { ok: false, error: '只能走一步。' };
     if (b && (!b.revealed || b.color === a.color)) return { ok: false, error: '不可吃子。' };
+    if (b) {
+      if (!g.data.captures[clientId]) g.data.captures[clientId] = [];
+      g.data.captures[clientId].push({ color: b.color, kind: b.kind });
+    }
     g.data.board[to.y][to.x] = a;
     g.data.board[from.y][from.x] = null;
     switchDarkTurn(g, clientId);

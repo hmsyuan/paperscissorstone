@@ -197,7 +197,7 @@ function renderRps(game) {
     : game.data.phase === 'revealed'
       ? describeRpsRound(game)
       : game.data.phase === 'countdown'
-        ? `全部出拳完成，${countDownLeft}...`
+        ? `<span class="rps-countdown">${countDownLeft || '開獎'}</span>`
         : `第 ${game.data.round} 輪：等待所有存活玩家出拳`;
   el.gameUi.innerHTML = `
     <div class="arena rps-arena table-theme">
@@ -379,9 +379,33 @@ function renderDarkChess(game) {
   }
   const firstText = game.data.firstPlayerClientId ? `丟銅板先手：${findName(game, game.data.firstPlayerClientId)}` : '等待丟銅板決定先手';
   const turnText = game.data.turnClientId ? `輪到：${findName(game, game.data.turnClientId)}` : '';
-  el.gameUi.innerHTML = `<div class="arena"><div>暗棋 ${firstText}${turnText ? ` ｜ ${turnText}` : ''}</div></div>`;
+  const colorMap = game.participants
+    .map((p, idx) => `${p.nickname}：${idx === 0 ? '🔴 紅方' : '⚫ 黑方'}`)
+    .join(' ｜ ');
+  el.gameUi.innerHTML = `<div class="arena"><div>暗棋 ${firstText}${turnText ? ` ｜ ${turnText}` : ''}</div><div class="dark-roles">${colorMap}</div><div id="dark-captures" class="dark-captures"></div></div>`;
   el.gameUi.firstElementChild.appendChild(board);
+  renderDarkCaptures(game);
   const reset = document.createElement('button'); reset.textContent = '重開棋局'; reset.onclick = () => doAct({ action: 'reset' }); el.gameUi.appendChild(reset);
+}
+
+
+function renderDarkCaptures(game) {
+  const box = el.gameUi.querySelector('#dark-captures');
+  if (!box) return;
+  const view = game.data.captureView || [];
+  box.innerHTML = '';
+  for (const row of view) {
+    const who = findName(game, row.playerId);
+    const item = document.createElement('div');
+    item.className = 'dark-cap-item';
+    if (row.playerId === meId) {
+      const mine = (row.pieces || []).map((p) => pieceText({ ...p, revealed: true })).join(' ');
+      item.innerHTML = `<b>${who} 吃掉</b>：${mine || '（尚無）'} <small>共 ${row.count} 子</small>`;
+    } else {
+      item.innerHTML = `<b>${who} 吃掉</b>：❓❓❓ <small>共 ${row.count} 子</small>`;
+    }
+    box.appendChild(item);
+  }
 }
 
 function renderChat(game) {
